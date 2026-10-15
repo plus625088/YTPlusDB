@@ -4,7 +4,7 @@
 import { CLOUD, LIMITS } from "../config.js";
 import { $, esc, toast, run, captureDrafts, restoreDrafts } from "../core/dom.js";
 import { state, getVideo, sortMarks, isAdmin, isMine, canEdit, getName, setName } from "../core/state.js";
-import { parseTime, formatTime, formatDate, parseTags, tagsToText, watchUrl } from "../core/format.js";
+import { parseTime, formatTime, formatDate, parseTags, tagsToText, watchUrl, hasTime } from "../core/format.js";
 import { registerView, show, nav } from "../core/router.js";
 import {
   mountPlayer, seekTo, pausePlayer, currentTime, isPlayerReady, currentVideoData,
@@ -82,7 +82,7 @@ function highlightActiveMark(force) {
   if (now == null || !v) return;
 
   let active = null;
-  for (const m of v.marks) if (m.t <= now + 0.5) active = m.id;
+  for (const m of v.marks) if (hasTime(m.t) && m.t <= now + 0.5) active = m.id;
   if (active === activeMarkId && !force) return;
   activeMarkId = active;
   document.querySelectorAll("#mark-list .mark").forEach((li) => li.classList.toggle("active", li.dataset.id === active));
@@ -172,8 +172,8 @@ function renderMark(v, m) {
   if (m.id === editingMarkId && canEdit(m)) {
     return `<li class="mark editing" data-id="${id}">
       <form class="stack" style="gap:8px" data-edit="${id}">
-        <input type="text" class="tcin" id="edit-t-${id}" value="${formatTime(m.t)}" aria-label="時間碼">
-        <textarea id="edit-n-${id}" maxlength="${LIMITS.note}" aria-label="備註">${esc(m.note)}</textarea>
+        <input type="text" class="tcin" id="edit-t-${id}" value="${hasTime(m.t) ? formatTime(m.t) : ""}" placeholder="可不填" aria-label="時間碼">
+        <textarea id="edit-n-${id}" maxlength="${LIMITS.note}" aria-label="說明">${esc(m.note)}</textarea>
         <div class="row">
           <button class="btn primary" type="submit">儲存</button>
           <button class="btn" type="button" data-cancel>取消</button>
@@ -192,8 +192,10 @@ function renderMark(v, m) {
     : "";
 
   return `<li class="mark" data-id="${id}">
-    <a class="tc-chip" href="${esc(watchUrl(v.id, m.t))}" target="_blank" rel="noopener noreferrer" data-seek="${m.t}">${formatTime(m.t)}</a>
-    <div class="note">${esc(m.note) || '<span class="muted">（無備註）</span>'}${byline}</div>
+    ${hasTime(m.t)
+      ? `<a class="tc-chip" href="${esc(watchUrl(v.id, m.t))}" target="_blank" rel="noopener noreferrer" data-seek="${m.t}">${formatTime(m.t)}</a>`
+      : '<span class="tc-chip no-time" title="沒有時間碼，是整部影片的說明">整部</span>'}
+    <div class="note">${esc(m.note) || '<span class="muted">（無說明）</span>'}${byline}</div>
     ${actions}
     ${renderThread(m)}
   </li>`;
@@ -287,9 +289,11 @@ async function onListSubmit(e) {
 
   if (form.dataset.edit) {
     const id = form.dataset.edit;
-    const t = parseTime(field("edit-t-" + id).value);
-    if (t === null) { toast("時間格式看不懂，例：1:23"); return; }
+    const timeText = field("edit-t-" + id).value.trim();
+    const t = timeText ? parseTime(timeText) : null; // 時間碼可以清空
+    if (timeText && t === null) { toast("時間格式看不懂，例：1:23"); return; }
     const note = field("edit-n-" + id).value.trim().slice(0, LIMITS.note);
+    if (t === null && !note) { toast("時間碼和說明至少要填一個"); return; }
     editingMarkId = null;
     if (await run(() => state.store.updateMark(currentId, id, { t, note }), "已更新")) renderMarks();
     return;
@@ -324,14 +328,16 @@ async function onQuickAdd(e) {
   const name = $("#quick-name").value.trim();
   if (!name) { toast("請填上你的名字"); $("#quick-name").focus(); return; }
 
-  let timeText = $("#quick-time").value;
-  if (!timeText.trim() && currentTime() != null) timeText = String(Math.floor(currentTime()));
-  const t = parseTime(timeText);
-  if (t === null) { toast("請輸入時間，例：1:23"); return; }
+  // 時間碼可不填：播放中會自動用目前播放位置，否則存成整部影片的說明
+  let timeText = $("#quick-time").value.trim();
+  if (!timeText && currentTime() != null) timeText = String(Math.floor(currentTime()));
+  const t = timeText ? parseTime(timeText) : null;
+  if (timeText && t === null) { toast("時間格式看不懂，例：1:23"); return; }
+  const note = $("#quick-note").value.trim().slice(0, LIMITS.note);
+  if (t === null && !note) { toast("請輸入時間碼或說明"); return; }
 
   setName(name);
-  const note = $("#quick-note").value.trim().slice(0, LIMITS.note);
-  if (await run(() => state.store.addMark(currentId, t, note, name), `已新增 ${formatTime(t)}`)) {
+  if (await run(() => state.store.addMark(currentId, t, note, name), t === null ? "已新增說明" : `已新增 ${formatTime(t)}`)) {
     $("#quick-time").value = "";
     $("#quick-note").value = "";
   }

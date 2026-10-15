@@ -2,13 +2,13 @@
  * 「批次匯入」分頁（只有管理者）：上傳 Excel → 預覽與檢查 → 匯入。
  *
  * Excel 格式見 template.xlsx：工作表「時間點」，一列一個時間點，欄位
- *   影片網址* | 時間碼* | 可看點備註 | 建立者 | Hashtag | 影片標題 | 頻道名稱
+ *   影片網址* | 時間碼 | 說明 | 建立者 | Hashtag | 影片標題 | 頻道名稱
  * 欄位順序不限，會依標題列的文字找欄位。
  */
 import { LIMITS } from "../config.js";
 import { $, esc, toast, run } from "../core/dom.js";
 import { state, getVideo, isAdmin, getName } from "../core/state.js";
-import { parseVideoId, parseTime, formatTime, parseTags, tagsToText } from "../core/format.js";
+import { parseVideoId, parseTime, formatTime, parseTags, tagsToText, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
 import { fetchVideoMeta } from "../youtube/meta.js";
 
@@ -18,7 +18,7 @@ const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.ful
 const COLUMN_NAMES = {
   url: ["網址", "url", "連結", "link"],
   time: ["時間", "timecode", "time"],
-  note: ["備註", "可看點", "note"],
+  note: ["說明", "備註", "可看點", "note"],
   author: ["建立者", "作者", "author"],
   tags: ["hashtag", "標籤", "tag"],
   title: ["標題", "title"],
@@ -109,9 +109,10 @@ function buildPlan(rows) {
       Object.assign(item, { status: "skip", message: "範例列，略過" });
     } else {
       item.id = parseVideoId(item.url);
-      item.t = parseTime(item.timeText);
+      item.t = item.timeText ? parseTime(item.timeText) : null; // 時間碼可不填
       if (!item.id) Object.assign(item, { status: "error", message: item.url ? "網址看不懂" : "缺少影片網址" });
-      else if (item.t === null) Object.assign(item, { status: "error", message: item.timeText ? `時間碼「${item.timeText}」看不懂` : "缺少時間碼" });
+      else if (item.timeText && item.t === null) Object.assign(item, { status: "error", message: `時間碼「${item.timeText}」看不懂` });
+      else if (item.t === null && !item.note) Object.assign(item, { status: "error", message: "時間碼和說明至少要填一個" });
       else if (!item.author) Object.assign(item, { status: "error", message: "缺少建立者（可填上方的預設建立者）" });
       else {
         const key = `${item.id}|${item.t}|${item.note}`;
@@ -161,7 +162,7 @@ function renderPlan() {
     ? plan.map((i) => `<tr class="${i.status === "error" ? "err" : ""}">
         <td class="num">${i.line}</td>
         <td>${videoLabel(i)}</td>
-        <td>${i.t != null ? `<span class="tc-chip">${formatTime(i.t)}</span>` : esc(i.timeText)}</td>
+        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : '<span class="tc-chip no-time">整部</span>'}</td>
         <td>${esc(i.note)}</td>
         <td>${esc(i.author)}</td>
         <td>${esc(tagsToText(i.tags))}</td>

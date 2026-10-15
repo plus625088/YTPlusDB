@@ -77,7 +77,7 @@ service cloud.firestore {
         && data().uid == request.auth.uid
         && isVideoId(data().videoId)
         && existsAfter(/databases/$(database)/documents/videos/$(data().videoId))
-        && validTime(data().t)
+        && (data().t == null || validTime(data().t))   // 時間碼可不填
         && str(data().note, 2000)
         && nonEmptyStr(data().author, 40)
         && data().createdAt == request.time;
@@ -86,7 +86,7 @@ service cloud.firestore {
       allow update: if isAdmin() || (
         ownedBySelf()
         && changed().hasOnly(['t', 'note'])
-        && validTime(data().t)
+        && (data().t == null || validTime(data().t))
         && str(data().note, 2000)
       );
 

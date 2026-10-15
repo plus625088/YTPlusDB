@@ -1237,3 +1237,11 @@ details.panel summary {
     padding-block:2px;
   }
 }
+
+/* 沒有時間碼的說明（整部影片） */
+.tc-chip.no-time {
+  background:var(--surface-2);
+  color:var(--muted);
+  font-family:var(--f-body);
+  font-weight:500;
+}

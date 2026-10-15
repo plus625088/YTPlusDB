@@ -24,7 +24,7 @@ function addEntryRow() {
   row.className = "entry";
   row.innerHTML = `
     <input type="text" class="tcin" id="e-t-${i}" placeholder="1:23" aria-label="時間碼">
-    <textarea id="e-n-${i}" rows="1" placeholder="這段的可看點…" aria-label="備註" maxlength="${LIMITS.note}"></textarea>
+    <textarea id="e-n-${i}" rows="1" placeholder="說明…" aria-label="說明" maxlength="${LIMITS.note}"></textarea>
     <button type="button" class="btn ghost" aria-label="移除這一筆" data-rm>✕</button>`;
   $("#entries").appendChild(row);
   return row;
@@ -118,11 +118,11 @@ async function onSubmit(e) {
     const timeText = row.querySelector("input").value;
     const note = row.querySelector("textarea").value.trim().slice(0, LIMITS.note);
     if (!timeText.trim() && !note) continue; // 空白列略過
-    const t = parseTime(timeText);
-    if (t === null) return showError(`「${timeText || "(空白)"}」不是有效的時間，例：1:23`, row.querySelector("input"));
+    const t = timeText.trim() ? parseTime(timeText) : null; // 時間碼可不填
+    if (timeText.trim() && t === null) return showError(`「${timeText}」不是有效的時間，例：1:23`, row.querySelector("input"));
     marks.push({ t, note });
   }
-  if (!marks.length) return showError("至少填一筆時間點。");
+  if (!marks.length) return showError("至少填一筆時間碼或說明。");
 
   const button = $("#add-submit");
   button.disabled = true;

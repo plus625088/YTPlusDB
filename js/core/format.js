@@ -70,6 +70,9 @@ export function parseTime(input) {
   return null;
 }
 
+/** 是否有時間碼（沒有時間碼的說明，t 為 null，代表整部影片） */
+export const hasTime = (t) => Number.isInteger(t) && t >= 0;
+
 /** 秒數轉成 1:23 或 1:02:03 */
 export function formatTime(seconds) {
   const t = Math.max(0, Math.floor(seconds));

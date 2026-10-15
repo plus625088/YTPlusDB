@@ -3,7 +3,7 @@
  *
  * Firestore 的三個集合（collection）：
  *   videos/{影片ID}   title, channel, tags[], publishedAt, createdBy, createdAt, updatedAt
- *   marks/{自動ID}    videoId, t, note, author, uid, createdAt
+ *   marks/{自動ID}    videoId, t（秒，沒有時間碼時為 null）, note, author, uid, createdAt
  *   comments/{自動ID} videoId, markId, text, author, uid, createdAt
  *
  * 登入：
@@ -16,7 +16,7 @@
 import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, LIMITS } from "../config.js";
 import { toast } from "../core/dom.js";
 import { state, emitChange, isAdmin } from "../core/state.js";
-import { isVideoId } from "../core/format.js";
+import { isVideoId, hasTime } from "../core/format.js";
 
 /** Firestore 自動產生的文件 ID 一律是 20 碼英數 */
 const DOC_ID = /^[A-Za-z0-9]{20}$/;
@@ -77,8 +77,8 @@ export async function createCloudStore() {
     const markById = new Map();
     for (const [id, m] of raw.marks) {
       const v = videoById.get(m.videoId);
-      if (!v || !DOC_ID.test(id) || !Number.isFinite(m.t)) continue;
-      const mark = { id, t: m.t, note: str(m.note, LIMITS.note), author: str(m.author, LIMITS.author), uid: m.uid || "", comments: [] };
+      if (!v || !DOC_ID.test(id) || (m.t != null && !hasTime(m.t))) continue;
+      const mark = { id, t: hasTime(m.t) ? m.t : null, note: str(m.note, LIMITS.note), author: str(m.author, LIMITS.author), uid: m.uid || "", comments: [] };
       v.marks.push(mark);
       markById.set(id, mark);
     }

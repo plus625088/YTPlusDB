@@ -1,6 +1,6 @@
 # YT Timecode筆記（YTPlusDB）
 
-記錄 YouTube 影片的時間碼與可看點備註，大家可以一起新增、留言補充、搜尋。
+記錄 YouTube 影片的時間碼與說明，大家可以一起新增、留言補充、搜尋。
 
 網站：https://plus625088.github.io/YTPlusDB/
 

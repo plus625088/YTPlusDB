@@ -4,7 +4,7 @@
 import { CLOUD } from "../config.js";
 import { $, toast, run } from "../core/dom.js";
 import { state, isAdmin } from "../core/state.js";
-import { isVideoId } from "../core/format.js";
+import { isVideoId, hasTime } from "../core/format.js";
 
 /** 把目前資料整理成可備份的 JSON（不含內部 ID） */
 function exportData() {
@@ -30,7 +30,9 @@ export function sanitizeImport(data) {
         title: String(v.title || ""),
         channel: String(v.channel || ""),
         tags: Array.isArray(v.tags) ? v.tags.map(String).slice(0, 30) : [],
-        marks: (v.marks || []).filter((m) => m && Number.isInteger(m.t) && m.t >= 0),
+        marks: (v.marks || [])
+          .filter((m) => m && (m.t == null || hasTime(m.t)))
+          .map((m) => ({ ...m, t: hasTime(m.t) ? m.t : null })),
       })),
   };
 }

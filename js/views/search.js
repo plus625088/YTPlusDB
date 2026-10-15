@@ -1,9 +1,9 @@
 /**
- * 「搜尋」分頁：同時比對備註、補充評論、標題、頻道、Hashtag、建立者。
+ * 「搜尋」分頁：同時比對說明、補充評論、標題、頻道、Hashtag、建立者。
  */
 import { $, esc } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";
-import { formatTime } from "../core/format.js";
+import { formatTime, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
 import { openVideo } from "./video.js";
 
@@ -51,8 +51,10 @@ function renderHit(v, { mark: m, matchedComments }, terms) {
     .join("");
   const commentCount = (m.comments || []).length && !matchedComments.length
     ? `<span class="hit-c">💬 ${m.comments.length} 則補充</span>` : "";
-  return `<button class="hit" data-open="${esc(v.id)}" data-t="${m.t}"${expandAttr}>
-    <span class="tc-chip">${formatTime(m.t)}</span>
+  const timeAttr = hasTime(m.t) ? ` data-t="${m.t}"` : "";
+  const chip = hasTime(m.t) ? `<span class="tc-chip">${formatTime(m.t)}</span>` : '<span class="tc-chip no-time">整部</span>';
+  return `<button class="hit" data-open="${esc(v.id)}"${timeAttr}${expandAttr}>
+    ${chip}
     <span class="note">${highlight(m.note, terms)}${m.author ? ` <span class="muted small">— ${highlight(m.author, terms)}</span>` : ""}${commentLines}${commentCount}</span>
   </button>`;
 }
@@ -64,7 +66,7 @@ function render() {
   const summary = $("#search-summary");
 
   if (!terms.length) {
-    summary.textContent = "輸入關鍵字會同時比對備註、補充評論、影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。";
+    summary.textContent = "輸入關鍵字會同時比對說明、補充評論、影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。";
     out.innerHTML = "";
     return;
   }

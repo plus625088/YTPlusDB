@@ -5,13 +5,14 @@
  *   videos: [{
  *     id, title, channel, tags[], publishedAt(毫秒), updatedAt(毫秒), sample?,
  *     marks: [{
- *       id, t(秒), note, author, uid,
+ *       id, t(秒，沒有時間碼時為 null), note, author, uid,
  *       comments: [{ id, text, author, uid, createdAt }]
  *     }]
  *   }]
  */
 import { ADMIN_EMAILS, CLOUD, LIMITS } from "../config.js";
 import { $, storageGet, storageSet } from "./dom.js";
+import { hasTime } from "./format.js";
 
 export const state = {
   db: { videos: [] },
@@ -31,7 +32,8 @@ export const emitChange = () => listeners.forEach((fn) => fn());
 /* ---------- 查詢 ---------- */
 
 export const getVideo = (id) => state.db.videos.find((v) => v.id === id);
-export const sortMarks = (video) => video.marks.sort((a, b) => a.t - b.t);
+/** 時間點依時間排序；沒有時間碼的說明排在最前面 */
+export const sortMarks = (video) => video.marks.sort((a, b) => (hasTime(a.t) ? a.t : -1) - (hasTime(b.t) ? b.t : -1));
 
 /* ---------- 身分與權限（畫面用，真正的檢查在 firestore.rules） ---------- */
 

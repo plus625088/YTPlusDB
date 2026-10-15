@@ -127,7 +127,7 @@ export function createLocalStore() {
 
     /* ----- 匯入（備份還原、Excel 批次匯入） ----- */
 
-    /** 回傳新增的時間點數量；重複的時間點（同時間、同備註）會略過 */
+    /** 回傳新增的時間點數量；重複的時間點（同時間、同說明）會略過 */
     async importData({ videos }) {
       let added = 0;
       for (const nv of videos) {

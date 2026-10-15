@@ -3,7 +3,7 @@
  */
 import { $, esc, storageGet, storageSet } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";
-import { formatTime, formatDate } from "../core/format.js";
+import { formatTime, formatDate, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
 import { openVideo } from "./video.js";
 
@@ -50,7 +50,7 @@ function renderCard(v) {
   sortMarks(v);
   const id = esc(v.id);
   const preview = v.marks.slice(0, 2)
-    .map((m) => `<div class="peek"><span class="tc-chip">${formatTime(m.t)}</span><span>${esc(m.note)}</span></div>`)
+    .map((m) => `<div class="peek">${hasTime(m.t) ? `<span class="tc-chip">${formatTime(m.t)}</span>` : '<span class="tc-chip no-time">整部</span>'}<span>${esc(m.note)}</span></div>`)
     .join("");
   const byline = [v.channel && esc(v.channel), v.publishedAt && formatDate(v.publishedAt)].filter(Boolean).join(" · ");
   const tags = (v.tags || []).map((t) => `<span class="tag" data-filter="${esc(t)}">#${esc(t)}</span>`).join("");

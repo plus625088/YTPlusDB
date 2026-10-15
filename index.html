@@ -96,7 +96,7 @@
       <form class="quick area-quick" id="quick-form">
         <button type="button" class="btn" id="grab-time" title="把目前播放位置填入時間碼">⏱ 記下目前時間</button>
         <input type="text" class="tcin" id="quick-time" placeholder="1:23" aria-label="時間碼">
-        <input type="text" id="quick-note" placeholder="可看點備註…" aria-label="備註">
+        <input type="text" id="quick-note" placeholder="說明…" aria-label="說明">
         <input type="text" id="quick-name" placeholder="你的名字" aria-label="建立者名字">
         <button class="btn primary" type="submit">新增</button>
       </form>
@@ -146,8 +146,8 @@
           </div>
         </div>
         <div class="field">
-          <label>時間碼與可看點 <span class="req">*</span></label>
-          <div class="hint">時間可輸入 1:23、01:02:03、83（秒）或 1m23s。</div>
+          <label>時間碼與說明 <span class="req">*</span></label>
+          <div class="hint">時間碼可以不填（例如寫整部影片的說明）。時間可輸入 1:23、01:02:03、83（秒）或 1m23s。</div>
           <div class="stack" id="entries" style="gap:8px"></div>
           <div><button type="button" class="btn" id="add-entry">＋ 再加一筆時間點</button></div>
         </div>
@@ -198,7 +198,7 @@
     <div class="stack" id="imp-result" style="margin-top:24px" hidden>
       <h2>3. 檢查並匯入</h2>
       <div class="imp-sum" id="imp-sum"></div>
-      <div class="tbl-wrap"><table class="prev"><thead><tr><th>列</th><th>影片</th><th>時間</th><th>可看點備註</th><th>建立者</th><th>Hashtag</th><th>狀態</th></tr></thead><tbody id="imp-rows"></tbody></table></div>
+      <div class="tbl-wrap"><table class="prev"><thead><tr><th>列</th><th>影片</th><th>時間</th><th>說明</th><th>建立者</th><th>Hashtag</th><th>狀態</th></tr></thead><tbody id="imp-rows"></tbody></table></div>
       <div class="row">
         <button class="btn primary" id="imp-go" disabled>匯入</button>
         <span class="hint" id="imp-progress"></span>
