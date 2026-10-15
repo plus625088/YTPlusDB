@@ -20,15 +20,18 @@ service cloud.firestore {
       allow read: if true;
 
       allow create: if videoId.matches('^[A-Za-z0-9_-]{11}$')
-        && request.resource.data.keys().hasOnly(['title', 'channel', 'tags', 'createdBy', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['title', 'channel', 'tags', 'createdBy', 'createdAt', 'updatedAt', 'publishedAt'])
+        && request.resource.data.get('publishedAt', 0) is int
         && str(request.resource.data.title, 200)
         && str(request.resource.data.channel, 100)
         && tagList(request.resource.data.tags)
         && str(request.resource.data.createdBy, 40);
 
-      // 一般人：只能更新時間、追加 Hashtag、補上原本空白的標題或頻道
+      // 一般人：只能更新時間、追加 Hashtag、補上原本空白的標題、頻道或發布日期
       allow update: if isAdmin() || (
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'tags', 'title', 'channel'])
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'tags', 'title', 'channel', 'publishedAt'])
+        && request.resource.data.get('publishedAt', 0) is int
+        && (resource.data.get('publishedAt', 0) == 0 || request.resource.data.get('publishedAt', 0) == resource.data.get('publishedAt', 0))
         && tagList(request.resource.data.tags)
         && request.resource.data.tags.hasAll(resource.data.tags)
         && str(request.resource.data.title, 200)

@@ -67,6 +67,7 @@ h2{font-size:16px;margin:0}
 .btn.danger-solid{background:var(--danger);border-color:var(--danger);color:#fff}
 .btn.sm{padding:5px 10px;font-size:13px}
 .btn:disabled{opacity:.5;cursor:not-allowed}
+select{font:inherit;color:inherit;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
 input[type=text],input[type=search],textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
 input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
 input[readonly]{border-color:transparent;background:transparent;box-shadow:none;padding-left:0}
@@ -222,6 +223,8 @@ details.panel summary{cursor:pointer;font-weight:700}
   <section id="view-library" hidden>
     <div class="lib-head">
       <div><h1>影片庫</h1><div class="muted small" id="lib-stats"></div></div>
+      <div class="row" style="margin-left:auto;gap:8px"><label for="sort-sel" class="small muted">排序</label>
+        <select id="sort-sel"><option value="published">發布時間（新→舊）</option><option value="published-asc">發布時間（舊→新）</option><option value="updated">最近更新</option></select></div>
       <button class="btn primary" data-nav="add">＋ 新增紀錄</button>
     </div>
     <div class="tagbar" id="tagbar"></div>
@@ -244,6 +247,8 @@ details.panel summary{cursor:pointer;font-weight:700}
         <div class="meta-grid">
           <label for="channel-input">頻道</label>
           <input type="text" id="channel-input" placeholder="頻道名稱">
+          <label>發布日期</label>
+          <span id="pub-date" class="small" style="padding:6px 0;font-variant-numeric:tabular-nums"></span>
           <label for="tags-input">Hashtag</label>
           <input type="text" id="tags-input" placeholder="#演唱會 #必看（用空白分開）">
         </div>
@@ -392,6 +397,8 @@ const FIREBASE_CONFIG = {
   appId: "1:859009825230:web:2eeeb1663b0ba61db7539f"
 };
 const ADMIN_EMAILS = ['osht9478@gmail.com', 'su3cj3x04@gmail.com'];
+/* YouTube Data API 金鑰：用來取得影片的發布日期（影片庫依發布時間排序）。留空時改依最近更新排序 */
+const YT_API_KEY = "";
 /* ===================================================================== */
 
 const FB_VER = '10.12.2';
@@ -422,14 +429,14 @@ let store;
 function seed(){
   const now = Date.now();
   return { videos: [
-    { id:'dQw4w9WgXcQ', title:'Rick Astley - Never Gonna Give You Up', channel:'Rick Astley', tags:['MV','80年代','經典'], sample:true, updatedAt:now,
+    { id:'dQw4w9WgXcQ', title:'Rick Astley - Never Gonna Give You Up', channel:'Rick Astley', tags:['MV','80年代','經典'], sample:true, updatedAt:now, publishedAt:Date.UTC(2009,9,25),
       marks:[
         {id:uid(), t:0,  note:'開場鼓點，經典前奏', author:'範例'},
         {id:uid(), t:43, note:'第一次副歌，招牌舞步', author:'範例'},
         {id:uid(), t:85, note:'第二段主歌，背景舞者走位', author:'範例'},
         {id:uid(), t:162,note:'橋段之後的副歌高潮', author:'範例'}
       ]},
-    { id:'jNQXAC9IVRw', title:'Me at the zoo', channel:'jawed', tags:['經典','YouTube歷史'], sample:true, updatedAt:now-1000,
+    { id:'jNQXAC9IVRw', title:'Me at the zoo', channel:'jawed', tags:['經典','YouTube歷史'], sample:true, updatedAt:now-1000, publishedAt:Date.UTC(2005,3,24),
       marks:[
         {id:uid(), t:0, note:'YouTube 第一支影片的開頭', author:'範例'},
         {id:uid(), t:5, note:'大象的長鼻子，經典台詞', author:'範例'}
@@ -485,7 +492,7 @@ async function makeCloudStore(){
   function rebuild(){
     if (!gotV || !gotM || !gotC) return;
     const vids = [];
-    for (const [id, d] of videosMap) vids.push({ id, title:d.title||'', channel:d.channel||'', tags:d.tags||[], updatedAt:ms(d.updatedAt), marks:[] });
+    for (const [id, d] of videosMap) vids.push({ id, title:d.title||'', channel:d.channel||'', tags:d.tags||[], updatedAt:ms(d.updatedAt), publishedAt:d.publishedAt||0, marks:[] });
     const byId = new Map(vids.map(v => [v.id, v]));
     const markById = new Map();
     for (const [id, m] of marksMap) { const v = byId.get(m.videoId); if (v) { const mk = { id, t:m.t, note:m.note||'', author:m.author||'', uid:m.uid||'', comments:[] }; v.marks.push(mk); markById.set(id, mk); } }
@@ -631,6 +638,35 @@ function fmt(t){
   const ss = String(s).padStart(2,'0');
   return h ? `${h}:${String(m).padStart(2,'0')}:${ss}` : `${m}:${ss}`;
 }
+const fmtDate = ms => { const d = new Date(ms); return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`; };
+async function fetchYtApi(ids){
+  const out = new Map(); if (!YT_API_KEY || !ids.length) return out;
+  for (let i = 0; i < ids.length; i += 50) {
+    try {
+      const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${ids.slice(i, i+50).join(',')}&key=${encodeURIComponent(YT_API_KEY)}`);
+      if (!r.ok) { console.warn('YouTube API 錯誤', r.status); continue; }
+      const d = await r.json();
+      for (const it of d.items || []) out.set(it.id, { publishedAt: Date.parse(it.snippet.publishedAt) || 0, title: it.snippet.title || '', channel: it.snippet.channelTitle || '' });
+    } catch(e){ console.warn(e); }
+  }
+  return out;
+}
+const metaTried = new Set();
+let backfillBusy = false;
+async function backfillMeta(){
+  if (!YT_API_KEY || backfillBusy || !store) return;
+  const need = db.videos.filter(v => !metaTried.has(v.id) && (!v.publishedAt || !v.title || !v.channel)).map(v => v.id);
+  if (!need.length) return;
+  need.forEach(id => metaTried.add(id));
+  backfillBusy = true;
+  try {
+    const got = await fetchYtApi(need);
+    for (const [id, m] of got) { const v = getVideo(id); if (!v) continue;
+      const patch = {}; if (!v.publishedAt && m.publishedAt) patch.publishedAt = m.publishedAt; if (!v.title && m.title) patch.title = m.title.slice(0,200); if (!v.channel && m.channel) patch.channel = m.channel.slice(0,100);
+      if (Object.keys(patch).length) await store.fillEmpty(id, patch).catch(e => console.warn(e)); }
+  } finally { backfillBusy = false; }
+  if (db.videos.some(v => !metaTried.has(v.id))) backfillMeta();
+}
 function parseTags(s){ const out=[]; for (const t of String(s||'').split(/[\s,，、#＃]+/)) { const x=t.trim().slice(0,40); if (x && !out.includes(x)) out.push(x); } return out.slice(0,30); }
 const tagStr = a => (a||[]).map(t => '#'+t).join(' ');
 const watchUrl = (id,t) => `https://www.youtube.com/watch?v=${id}` + (t ? `&t=${t}s` : '');
@@ -661,6 +697,7 @@ function renderModeBanner(){
 
 /* ---------- 資料更新時重畫 ---------- */
 function onData(){
+  if (loaded) backfillMeta();
   if (view === 'library') renderLibrary();
   else if (view === 'search') renderSearch();
   else if (view === 'video') {
@@ -703,7 +740,15 @@ function renderLibrary(){
   const names = Object.keys(allTags).sort((a,b) => allTags[b]-allTags[a] || a.localeCompare(b));
   $('#tagbar').hidden = !names.length;
   $('#tagbar').innerHTML = names.length ? `<span class="label">篩選</span><button class="tag" data-filter="" aria-pressed="${!tagFilter}">全部</button>` + names.map(t => `<button class="tag" data-filter="${esc(t)}" aria-pressed="${tagFilter===t}">#${esc(t)} <span class="muted">${allTags[t]}</span></button>`).join('') : '';
-  const vids = [...db.videos].filter(v => !tagFilter || (v.tags||[]).includes(tagFilter)).sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+  const mode = $('#sort-sel').value;
+  const vids = [...db.videos].filter(v => !tagFilter || (v.tags||[]).includes(tagFilter)).sort((a,b) => {
+    if (mode !== 'updated') {
+      const pa = a.publishedAt || 0, pb = b.publishedAt || 0;
+      if (pa && pb && pa !== pb) return mode === 'published-asc' ? pa - pb : pb - pa;
+      if (pa && !pb) return -1; if (pb && !pa) return 1;   // 沒有發布日期的排在最後
+    }
+    return (b.updatedAt||0) - (a.updatedAt||0);
+  });
   const total = vids.reduce((n,v) => n + v.marks.length, 0);
   $('#lib-stats').textContent = vids.length ? (tagFilter ? `#${tagFilter}：` : '') + `${vids.length} 部影片 · ${total} 個時間點` : '';
   if (!vids.length) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">還沒有任何紀錄。按「新增紀錄」貼上第一支 YouTube 影片網址。</div>`; return; }
@@ -712,10 +757,12 @@ function renderLibrary(){
     const peek = v.marks.slice(0,2).map(m => `<div class="peek"><span class="tc-chip">${fmt(m.t)}</span><span>${esc(m.note)}</span></div>`).join('');
     return `<button class="card" data-open="${v.id}">
       <div class="thumb"><span class="ph">${v.id}</span><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()"><span class="count">${v.marks.length} 個時間點</span></div>
-      <div class="card-body"><div class="row" style="gap:8px"><span class="card-title">${esc(v.title || '未命名影片')}</span>${v.sample?'<span class="chip">範例</span>':''}</div>${v.channel?`<div class="channel">${esc(v.channel)}</div>`:''}${(v.tags||[]).length?`<div class="tags">${v.tags.map(t=>`<span class="tag" data-filter="${esc(t)}">#${esc(t)}</span>`).join('')}</div>`:''}${peek}</div>
+      <div class="card-body"><div class="row" style="gap:8px"><span class="card-title">${esc(v.title || '未命名影片')}</span>${v.sample?'<span class="chip">範例</span>':''}</div>${(v.channel || v.publishedAt)?`<div class="channel">${esc(v.channel)}${v.channel && v.publishedAt ? ' · ' : ''}${v.publishedAt ? fmtDate(v.publishedAt) : ''}</div>`:''}${(v.tags||[]).length?`<div class="tags">${v.tags.map(t=>`<span class="tag" data-filter="${esc(t)}">#${esc(t)}</span>`).join('')}</div>`:''}${peek}</div>
     </button>`;
   }).join('');
 }
+try { const sv = lsGet('yt-timecode-notes.sort'); if (sv) $('#sort-sel').value = sv; } catch(e){}
+$('#sort-sel').addEventListener('change', e => { lsSet('yt-timecode-notes.sort', e.target.value); renderLibrary(); });
 $('#tagbar').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { tagFilter = b.dataset.filter || null; renderLibrary(); } });
 $('#lib-grid').addEventListener('click', e => {
   const tg = e.target.closest('[data-filter]'); if (tg) { e.stopPropagation(); tagFilter = tg.dataset.filter; renderLibrary(); return; }
@@ -746,6 +793,7 @@ function renderVideoMeta(force){
   $('#channel-input').placeholder = admin ? '頻道名稱' : '—';
   $('#tags-input').placeholder = admin ? '#演唱會 #必看（用空白分開）' : '—';
   $('#sample-chip').hidden = !v.sample;
+  $('#pub-date').textContent = v.publishedAt ? fmtDate(v.publishedAt) : '—';
   $('#yt-link').href = watchUrl(v.id);
   $('#del-video').hidden = !admin;
   if (!admin) $('#del-confirm').hidden = true;
@@ -1016,6 +1064,7 @@ $('#entries').addEventListener('click', e => { if (e.target.closest('[data-rm]')
 const metaCache = new Map();
 async function fetchMeta(id){
   if (metaCache.has(id)) return metaCache.get(id);
+  if (YT_API_KEY) { const got = await fetchYtApi([id]); const m = got.get(id); if (m && m.title) { metaCache.set(id, m); return m; } }
   const url = 'https://www.youtube.com/watch?v=' + id;
   let meta = null;
   for (const ep of ['https://noembed.com/embed?url=', 'https://www.youtube.com/oembed?format=json&url=']) {
