@@ -9,7 +9,7 @@
   新增外部服務時，要把它的網域加到對應的項目。
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://www.youtube.com https://s.ytimg.com https://cdnjs.cloudflare.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https://i.ytimg.com; connect-src 'self' https://*.googleapis.com https://noembed.com https://www.youtube.com https://www.gstatic.com; frame-src https://www.youtube.com https://www.youtube-nocookie.com https://ytplusdb.firebaseapp.com https://accounts.google.com https://apis.google.com; object-src 'none'; base-uri 'self'; form-action 'self'">
-<title>影片時間碼筆記</title>
+<title>YT Timecode筆記</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
@@ -21,11 +21,11 @@
 
 <header>
   <div class="wrap bar">
-    <div class="brand"><span class="tc">▶ 00:00</span>影片時間碼筆記</div>
+    <div class="brand"><span class="tc">▶ 00:00</span>YT Timecode筆記</div>
     <div class="bar-right">
       <nav aria-label="主選單">
-        <button data-nav="library" id="nav-library">影片庫</button>
-        <button data-nav="search" id="nav-search">搜尋備註</button>
+        <button data-nav="library" id="nav-library">影片</button>
+        <button data-nav="search" id="nav-search">搜尋</button>
         <button data-nav="add" id="nav-add">新增紀錄</button>
         <button data-nav="import" id="nav-import" hidden>批次匯入</button>
       </nav>
@@ -36,31 +36,42 @@
 </header>
 
 <main class="wrap">
-  <!-- 影片庫 -->
+  <!-- 影片列表（首頁） -->
   <section id="view-library" hidden>
     <div class="lib-head">
-      <div><h1>影片庫</h1><div class="muted small" id="lib-stats"></div></div>
+      <div><h1>影片</h1><div class="muted small" id="lib-stats"></div></div>
       <div class="row" style="margin-left:auto;gap:8px"><label for="sort-sel" class="small muted">排序</label>
         <select id="sort-sel"><option value="published">發布時間（新→舊）</option><option value="published-asc">發布時間（舊→新）</option><option value="updated">最近更新</option></select></div>
       <button class="btn primary" data-nav="add">＋ 新增紀錄</button>
     </div>
-    <div class="tagbar" id="tagbar"></div>
+    <div class="tag-toggle-row" id="tag-toggle-row" hidden>
+      <button class="btn sm" id="tag-toggle" aria-expanded="false" aria-controls="tagbar"># Hashtag 篩選 ▾</button>
+      <span id="tag-active"></span>
+    </div>
+    <div class="tagbar" id="tagbar" hidden></div>
     <div class="grid" id="lib-grid"></div>
   </section>
 
   <!-- 單一影片 -->
   <section id="view-video" hidden>
     <button class="btn ghost" id="back-btn">← 返回</button>
+    <!--
+      版面：電腦上左邊（播放器、標題、資訊、快速新增）＋右邊時間點列表；
+      手機上依序為 播放器（固定在上方）→ 標題 → 時間點 → 快速新增 → 影片資訊，
+      捲動時間點列表時影片一直看得到。各區塊位置由 css 的 grid-template-areas 決定。
+    -->
     <div class="vid-layout">
-      <div style="min-width:0">
+      <div class="area-player">
         <div class="player-box" id="player-box">
           <div id="yt-player"></div>
           <div class="fallback" id="player-fallback" hidden></div>
         </div>
-        <div class="vid-title">
-          <input type="text" id="title-input" aria-label="影片標題" placeholder="未命名影片">
-          <span class="chip" id="sample-chip" hidden>範例</span>
-        </div>
+      </div>
+      <div class="vid-title area-title">
+        <input type="text" id="title-input" aria-label="影片標題" placeholder="未命名影片">
+        <span class="chip" id="sample-chip" hidden>範例</span>
+      </div>
+      <div class="area-info">
         <div class="meta-grid">
           <label for="channel-input">頻道</label>
           <input type="text" id="channel-input" placeholder="頻道名稱">
@@ -70,7 +81,7 @@
           <input type="text" id="tags-input" placeholder="#演唱會 #必看（用空白分開）">
         </div>
         <div class="vid-actions">
-          <a class="small muted" id="yt-link" href="#" target="_blank" rel="noopener">在 YouTube 開啟 ↗</a>
+          <a class="small muted" id="yt-link" href="#" target="_blank" rel="noopener noreferrer">在 YouTube 開啟 ↗</a>
           <button class="btn danger-outline sm" id="del-video" hidden>🗑 刪除這部影片</button>
         </div>
         <div class="confirm-box" id="del-confirm" hidden>
@@ -81,15 +92,15 @@
             <button class="btn sm" id="del-video-no">取消</button>
           </div>
         </div>
-        <form class="quick" id="quick-form">
-          <button type="button" class="btn" id="grab-time" title="把目前播放位置填入時間碼">⏱ 記下目前時間</button>
-          <input type="text" class="tcin" id="quick-time" placeholder="1:23" aria-label="時間碼">
-          <input type="text" id="quick-note" placeholder="可看點備註…" aria-label="備註">
-          <input type="text" id="quick-name" placeholder="你的名字" aria-label="建立者名字">
-          <button class="btn primary" type="submit">新增</button>
-        </form>
       </div>
-      <aside class="rail">
+      <form class="quick area-quick" id="quick-form">
+        <button type="button" class="btn" id="grab-time" title="把目前播放位置填入時間碼">⏱ 記下目前時間</button>
+        <input type="text" class="tcin" id="quick-time" placeholder="1:23" aria-label="時間碼">
+        <input type="text" id="quick-note" placeholder="可看點備註…" aria-label="備註">
+        <input type="text" id="quick-name" placeholder="你的名字" aria-label="建立者名字">
+        <button class="btn primary" type="submit">新增</button>
+      </form>
+      <aside class="rail area-rail">
         <div class="rail-head"><div class="row" style="gap:8px"><h2>時間點</h2><span class="muted small" id="mark-count"></span></div><button class="btn sm" id="toggle-all" hidden>全部展開</button></div>
         <ul class="marks" id="mark-list"></ul>
       </aside>
@@ -98,7 +109,7 @@
 
   <!-- 搜尋 -->
   <section id="view-search" hidden>
-    <h1 style="margin-bottom:14px">搜尋備註</h1>
+    <h1 style="margin-bottom:14px">搜尋</h1>
     <div class="search-box">
       <input type="search" id="search-input" placeholder="輸入關鍵字，例如：副歌、經典台詞、#演唱會、建立者名字…" autocomplete="off">
     </div>

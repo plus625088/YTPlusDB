@@ -45,7 +45,16 @@ async function createStore() {
   }
 }
 
+/** 把頁首高度寫到 CSS 變數 --header-h（手機版固定播放器要貼在頁首下方） */
+function trackHeaderHeight() {
+  const header = document.querySelector("header");
+  const update = () => document.documentElement.style.setProperty("--header-h", header.offsetHeight + "px");
+  new ResizeObserver(update).observe(header);
+  update();
+}
+
 async function start() {
+  trackHeaderHeight();
   initHeader();
   initLibrary();
   initVideo();

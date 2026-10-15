@@ -1,5 +1,5 @@
 /**
- * 「影片庫」分頁：影片卡片列表、Hashtag 篩選、排序。
+ * 「影片」分頁：影片卡片列表、Hashtag 篩選、排序。
  */
 import { $, esc, storageGet, storageSet } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";
@@ -22,17 +22,27 @@ function compareVideos(a, b, mode) {
   return (b.updatedAt || 0) - (a.updatedAt || 0);
 }
 
+let tagsOpen = false; // Hashtag 篩選列預設收起
+
 function renderTagBar() {
   const counts = {};
   for (const v of state.db.videos) for (const t of v.tags || []) counts[t] = (counts[t] || 0) + 1;
   if (tagFilter && !counts[tagFilter]) tagFilter = null;
-
   const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+
+  // 「# Hashtag 篩選」按鈕；收起時，旁邊顯示目前套用的篩選（可按 ✕ 取消）
+  $("#tag-toggle-row").hidden = !names.length;
+  const toggle = $("#tag-toggle");
+  toggle.setAttribute("aria-expanded", String(tagsOpen));
+  toggle.textContent = `# Hashtag 篩選（${names.length}）${tagsOpen ? "▴" : "▾"}`;
+  $("#tag-active").innerHTML = tagFilter && !tagsOpen
+    ? `<button class="tag" data-filter="" aria-pressed="true" title="取消篩選">#${esc(tagFilter)} ✕</button>`
+    : "";
+
   const bar = $("#tagbar");
-  bar.hidden = !names.length;
+  bar.hidden = !names.length || !tagsOpen;
   bar.innerHTML = !names.length ? "" :
-    `<span class="label">篩選</span>
-     <button class="tag" data-filter="" aria-pressed="${!tagFilter}">全部</button>` +
+    `<button class="tag" data-filter="" aria-pressed="${!tagFilter}">全部</button>` +
     names.map((t) => `<button class="tag" data-filter="${esc(t)}" aria-pressed="${tagFilter === t}">#${esc(t)} <span class="muted">${counts[t]}</span></button>`).join("");
 }
 
@@ -63,6 +73,7 @@ function renderCard(v) {
 function render() {
   const grid = $("#lib-grid");
   if (!state.loaded) {
+    $("#tag-toggle-row").hidden = true;
     $("#tagbar").hidden = true;
     $("#lib-stats").textContent = "";
     grid.innerHTML = `<div class="empty" style="grid-column:1/-1">載入中…</div>`;
@@ -93,6 +104,10 @@ export function initLibrary() {
   if (saved) $("#sort-sel").value = saved;
   $("#sort-sel").addEventListener("change", (e) => { storageSet(SORT_KEY, e.target.value); render(); });
 
+  $("#tag-toggle").addEventListener("click", () => { tagsOpen = !tagsOpen; renderTagBar(); });
+  $("#tag-active").addEventListener("click", (e) => {
+    if (e.target.closest("[data-filter]")) { tagFilter = null; render(); }
+  });
   $("#tagbar").addEventListener("click", (e) => {
     const btn = e.target.closest("[data-filter]");
     if (btn) { tagFilter = btn.dataset.filter || null; render(); }

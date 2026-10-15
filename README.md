@@ -1,4 +1,4 @@
-# 影片時間碼筆記（YTPlusDB）
+# YT Timecode筆記（YTPlusDB）
 
 記錄 YouTube 影片的時間碼與可看點備註，大家可以一起新增、留言補充、搜尋。
 
@@ -28,7 +28,7 @@ js/
     meta.js             查詢影片標題、頻道、發布日期
   views/
     header.js           頁首（登入按鈕）
-    library.js          影片庫
+    library.js          影片列表（首頁）
     video.js            影片頁（播放器、時間點、補充評論）
     search.js           搜尋
     add.js              新增紀錄

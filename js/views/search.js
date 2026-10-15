@@ -1,5 +1,5 @@
 /**
- * 「搜尋備註」分頁：同時比對備註、補充評論、標題、頻道、Hashtag、建立者。
+ * 「搜尋」分頁：同時比對備註、補充評論、標題、頻道、Hashtag、建立者。
  */
 import { $, esc } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";

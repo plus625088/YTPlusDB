@@ -521,13 +521,52 @@ a.tc-chip:hover {
 .vid-layout {
   display:grid;
   grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);
-  gap:20px;
+  grid-template-areas:
+    "player rail"
+    "title  rail"
+    "info   rail"
+    "quick  rail";
+  grid-template-rows:auto auto auto 1fr;
+  column-gap:20px;
+  row-gap:12px;
   align-items:start;
 }
 
+.area-player { grid-area:player; min-width:0; }
+.area-title  { grid-area:title;  min-width:0; }
+.area-info   { grid-area:info;   min-width:0; }
+.area-quick  { grid-area:quick; }
+.area-rail   { grid-area:rail; }
+
+/*
+  手機：播放器固定在畫面上方（頁首下面），時間點列表緊接在播放器下方。
+  往下捲動看時間點時影片不會消失，點時間碼可以直接看到跳轉。
+  --header-h 由 js/main.js 依頁首實際高度設定。
+*/
 @media (max-width:860px) {
   .vid-layout {
     grid-template-columns:minmax(0,1fr);
+    grid-template-areas:
+      "player"
+      "title"
+      "rail"
+      "quick"
+      "info";
+    grid-template-rows:none;
+    row-gap:10px;
+  }
+
+  .area-player {
+    position:sticky;
+    top:calc(env(safe-area-inset-top,0px) + var(--header-h,0px));
+    z-index:5;
+    background:var(--bg);
+    padding-bottom:8px;
+    margin-inline:calc(-1 * max(16px,env(safe-area-inset-left,0px))) calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+  }
+
+  .area-player .player-box {
+    border-radius:0;
   }
 }
 
@@ -572,7 +611,6 @@ a.tc-chip:hover {
   display:flex;
   gap:10px;
   align-items:flex-start;
-  margin-block:14px 4px;
 }
 
 .vid-title input {
@@ -598,7 +636,6 @@ a.tc-chip:hover {
   grid-template-columns:72px minmax(0,1fr);
   gap:8px 10px;
   align-items:center;
-  margin-top:6px;
 }
 
 .meta-grid label {
@@ -643,7 +680,6 @@ a.tc-chip:hover {
   gap:8px;
   flex-wrap:wrap;
   align-items:center;
-  margin-top:14px;
 }
 
 .quick #quick-note {
@@ -1151,4 +1187,53 @@ details.panel summary {
   z-index:50;
   max-width:calc(100% - 32px);
   text-align:center;
+}
+
+/* ---------- Hashtag 篩選（預設收起） ---------- */
+.tag-toggle-row {
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+}
+
+.tag-toggle-row .btn[aria-expanded="true"] {
+  border-color:var(--accent);
+  color:var(--tc-fg);
+}
+
+/* ---------- 手機版頁首：精簡高度，選單佔滿一列 ---------- */
+@media (max-width:560px) {
+  .bar {
+    padding-block:8px;
+    gap:8px;
+  }
+
+  .brand {
+    font-size:15px;
+  }
+
+  .bar-right {
+    width:100%;
+    justify-content:space-between;
+  }
+
+  nav {
+    flex:1;
+    justify-content:space-between;
+  }
+
+  nav button {
+    padding:5px 10px;
+    flex:1;
+  }
+
+  main {
+    padding-block:12px 48px;
+  }
+
+  #back-btn {
+    padding-block:2px;
+  }
 }
