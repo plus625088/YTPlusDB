@@ -1,0 +1,620 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>影片時間碼筆記</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: sticky header with three tabs; video page = player beside a timecode rail (stacks on phones). Timecode chips borrow broadcast-amber. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --surface-2:#e4e9ef; --fg:#17202b; --muted:#5b6878; --line:#d3dae3;
+  --accent:#a85a06; --accent-ink:#ffffff; --tc-bg:#fff1d6; --tc-fg:#874400; --danger:#b42318; --hl:#ffe08a; --active:#fff8ea;
+  --f-body:"Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#10151c; --surface:#171e27; --surface-2:#1f2833; --fg:#e6ebf1; --muted:#93a0b0; --line:#2a3441;
+  --accent:#f0a530; --accent-ink:#1a1206; --tc-bg:#2d2210; --tc-fg:#ffc45e; --danger:#ff7b6b; --hl:#6b4d00; --active:#221c12; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10151c; --surface:#171e27; --surface-2:#1f2833; --fg:#e6ebf1; --muted:#93a0b0; --line:#2a3441;
+  --accent:#f0a530; --accent-ink:#1a1206; --tc-bg:#2d2210; --tc-fg:#ffc45e; --danger:#ff7b6b; --hl:#6b4d00; --active:#221c12; color-scheme:dark}
+
+*{box-sizing:border-box}
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.6}
+button,input,textarea{font:inherit;color:inherit}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1180px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:10;background:var(--bg);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-block:12px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;letter-spacing:.02em}
+.brand .tc{font-family:var(--f-mono);font-size:12px;background:var(--tc-bg);color:var(--tc-fg);padding:2px 7px;border-radius:5px;font-weight:700}
+nav{display:flex;gap:4px;background:var(--surface-2);padding:4px;border-radius:999px}
+nav button{border:0;background:transparent;padding:6px 14px;border-radius:999px;cursor:pointer;color:var(--muted);font-weight:500;white-space:nowrap}
+nav button[aria-current="page"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+main{padding-block:24px 64px}
+h1{font-size:22px;line-height:1.3;margin:0;text-wrap:balance}
+h2{font-size:16px;margin:0}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.label{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.stack{display:flex;flex-direction:column;gap:14px}
+
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--muted);padding:6px 8px}
+.btn.ghost:hover{color:var(--fg)}
+.btn.danger{color:var(--danger)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+input[type=text],input[type=search],textarea{width:100%;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:9px 12px}
+input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%,transparent)}
+textarea{resize:vertical;min-height:70px}
+.tcin{font-family:var(--f-mono);width:110px!important;flex:none}
+
+.tc-chip{font-family:var(--f-mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;background:var(--tc-bg);color:var(--tc-fg);padding:3px 9px;border-radius:6px;text-decoration:none;white-space:nowrap;display:inline-block}
+a.tc-chip:hover{outline:1px solid var(--tc-fg)}
+.tag{font-size:12px;padding:1px 8px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid transparent;cursor:pointer;font-weight:500;white-space:nowrap}
+.tag:hover{color:var(--fg);border-color:var(--line)}
+.tag[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tags{display:flex;flex-wrap:wrap;gap:6px}
+.channel{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
+.tagbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px}
+.meta-grid{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px 10px;align-items:center;margin-top:10px}
+.meta-grid label{font-size:13px;color:var(--muted)}
+.meta-grid input{padding:6px 10px}
+.chip{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:500}
+
+/* Library */
+.lib-head{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;cursor:pointer;text-align:left;padding:0;display:flex;flex-direction:column;min-width:0}
+.card:hover{border-color:var(--muted)}
+.thumb{aspect-ratio:16/9;max-width:100%;background:var(--surface-2);position:relative;display:grid;place-items:center;overflow:hidden}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .ph{font-family:var(--f-mono);color:var(--muted);font-size:12px}
+.thumb .count{position:absolute;right:8px;bottom:8px;font-family:var(--f-mono);font-size:12px;background:rgba(0,0,0,.72);color:#fff;padding:2px 7px;border-radius:5px}
+.card-body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.card-title{font-weight:700;line-height:1.4;overflow-wrap:anywhere}
+.peek{display:flex;gap:8px;align-items:baseline;font-size:13px;min-width:0}
+.peek span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);min-width:0}
+
+/* Video page */
+.vid-layout{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:860px){.vid-layout{grid-template-columns:minmax(0,1fr)}}
+.player-box{aspect-ratio:16/9;max-width:100%;background:#000;border-radius:var(--r);overflow:hidden;position:relative}
+.player-box iframe,#yt-player{width:100%;height:100%;display:block;border:0}
+.fallback{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:10px;padding:20px;color:#dfe5ec;background:#121820;font-size:14px}
+.fallback strong{color:#fff}
+.fallback a{color:#ffc45e}
+.vid-title{display:flex;gap:10px;align-items:flex-start;margin-block:14px 4px}
+.vid-title input{font-size:18px;font-weight:700;border-color:transparent;background:transparent;padding:4px 8px;margin-left:-8px}
+.vid-title input:hover{border-color:var(--line)}
+.quick{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+.quick input[type=text]:not(.tcin){flex:1 1 200px;min-width:0}
+.rail{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:flex;flex-direction:column;max-height:calc(100vh - 140px);min-width:0}
+@media (max-width:860px){.rail{max-height:none}}
+.rail-head{padding:12px 14px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center}
+.marks{list-style:none;margin:0;padding:6px;overflow:auto}
+.mark{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:start;padding:9px 8px;border-radius:8px}
+.mark.active{background:var(--active);box-shadow:inset 3px 0 0 var(--accent)}
+.mark .note{white-space:pre-wrap;overflow-wrap:anywhere;padding-top:1px}
+.mark .acts{display:flex;gap:2px;opacity:.55}
+.mark:hover .acts,.mark:focus-within .acts{opacity:1}
+.mark.editing{grid-template-columns:minmax(0,1fr)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+
+/* Search */
+.search-box{position:relative;margin-bottom:18px}
+.search-box input{font-size:17px;padding:12px 14px}
+mark{background:var(--hl);color:inherit;border-radius:3px;padding:0 1px}
+.result{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+.result-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;flex-wrap:wrap}
+.result-head button{background:none;border:0;padding:0;font-weight:700;font-size:16px;cursor:pointer;text-align:left;overflow-wrap:anywhere}
+.result-head button:hover{text-decoration:underline}
+.hit{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;background:none;border:0;text-align:left;padding:6px 4px;border-radius:6px;cursor:pointer}
+.hit:hover{background:var(--surface-2)}
+.hit .note{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* Add */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:20px;display:flex;flex-direction:column;gap:16px;max-width:760px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field label{font-weight:500;font-size:14px}
+.hint{font-size:13px;color:var(--muted)}
+.hint.ok{color:var(--tc-fg)}
+.hint.err{color:var(--danger)}
+.entry{display:grid;grid-template-columns:110px minmax(0,1fr) auto;gap:8px;align-items:start}
+@media (max-width:520px){.entry{grid-template-columns:96px minmax(0,1fr) auto}.tcin{width:96px!important}}
+.entry textarea{min-height:42px}
+.add-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:24px}
+details.panel summary{cursor:pointer;font-weight:700}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:500;z-index:50;transition:opacity .2s}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<header>
+  <div class="wrap bar">
+    <div class="brand"><span class="tc">▶ 00:00</span>影片時間碼筆記</div>
+    <nav aria-label="主選單">
+      <button data-nav="library" id="nav-library">影片庫</button>
+      <button data-nav="search" id="nav-search">搜尋備註</button>
+      <button data-nav="add" id="nav-add">新增紀錄</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 影片庫 -->
+  <section id="view-library" hidden>
+    <div class="lib-head">
+      <div><h1>影片庫</h1><div class="muted small" id="lib-stats"></div></div>
+      <button class="btn primary" data-nav="add">＋ 新增紀錄</button>
+    </div>
+    <div class="tagbar" id="tagbar"></div>
+    <div class="grid" id="lib-grid"></div>
+  </section>
+
+  <!-- 單一影片 -->
+  <section id="view-video" hidden>
+    <button class="btn ghost" id="back-btn">← 返回</button>
+    <div class="vid-layout">
+      <div style="min-width:0">
+        <div class="player-box" id="player-box">
+          <div id="yt-player"></div>
+          <div class="fallback" id="player-fallback" hidden></div>
+        </div>
+        <div class="vid-title">
+          <input type="text" id="title-input" aria-label="影片標題" placeholder="未命名影片">
+          <span class="chip" id="sample-chip" hidden>範例</span>
+        </div>
+        <div class="meta-grid">
+          <label for="channel-input">頻道</label>
+          <input type="text" id="channel-input" placeholder="頻道名稱">
+          <label for="tags-input">Hashtag</label>
+          <input type="text" id="tags-input" placeholder="#演唱會 #必看（用空白分開）">
+        </div>
+        <div class="row small muted" style="gap:14px;margin-top:8px">
+          <a id="yt-link" href="#" target="_blank" rel="noopener">在 YouTube 開啟 ↗</a>
+          <button class="btn ghost danger small" id="del-video">刪除這部影片</button>
+        </div>
+        <form class="quick" id="quick-form">
+          <button type="button" class="btn" id="grab-time" title="把目前播放位置填入時間碼">⏱ 記下目前時間</button>
+          <input type="text" class="tcin" id="quick-time" placeholder="1:23" aria-label="時間碼">
+          <input type="text" id="quick-note" placeholder="可看點備註…" aria-label="備註">
+          <button class="btn primary" type="submit">新增</button>
+        </form>
+      </div>
+      <aside class="rail">
+        <div class="rail-head"><h2>時間點</h2><span class="muted small" id="mark-count"></span></div>
+        <ul class="marks" id="mark-list"></ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- 搜尋 -->
+  <section id="view-search" hidden>
+    <h1 style="margin-bottom:14px">搜尋備註</h1>
+    <div class="search-box">
+      <input type="search" id="search-input" placeholder="輸入關鍵字，例如：副歌、經典台詞、#演唱會…" autocomplete="off">
+    </div>
+    <div class="muted small" id="search-summary" style="margin-bottom:12px"></div>
+    <div class="stack" id="search-results"></div>
+  </section>
+
+  <!-- 新增 -->
+  <section id="view-add" hidden>
+    <h1 style="margin-bottom:16px">新增紀錄</h1>
+    <div class="add-cols">
+      <form class="panel" id="add-form" novalidate>
+        <div class="field">
+          <label for="add-url">YouTube 影片網址</label>
+          <input type="text" id="add-url" placeholder="https://www.youtube.com/watch?v=… 或 https://youtu.be/…" autocomplete="off">
+          <div class="hint" id="url-hint">支援一般網址、youtu.be 短網址、Shorts；網址裡帶的 t= 時間會自動帶入。</div>
+        </div>
+        <div class="field">
+          <label for="add-title">影片標題 <span class="muted small">（選填，播放時會自動抓取）</span></label>
+          <input type="text" id="add-title" placeholder="例：2025 演唱會全場">
+        </div>
+        <div class="add-meta" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px">
+          <div class="field">
+            <label for="add-channel">頻道名稱 <span class="muted small">（選填）</span></label>
+            <input type="text" id="add-channel" placeholder="例：五月天 Mayday">
+          </div>
+          <div class="field">
+            <label for="add-tags">Hashtag <span class="muted small">（選填）</span></label>
+            <input type="text" id="add-tags" placeholder="#演唱會 #現場">
+          </div>
+        </div>
+        <div class="field">
+          <label>時間碼與可看點</label>
+          <div class="hint">時間可輸入 1:23、01:02:03、83（秒）或 1m23s。</div>
+          <div class="stack" id="entries" style="gap:8px"></div>
+          <div><button type="button" class="btn" id="add-entry">＋ 再加一筆時間點</button></div>
+        </div>
+        <div class="row">
+          <button class="btn primary" type="submit">儲存紀錄</button>
+          <span class="hint err" id="form-err"></span>
+        </div>
+      </form>
+
+      <details class="panel" id="backup">
+        <summary>備份與還原</summary>
+        <div class="hint">紀錄存在這個瀏覽器裡。換電腦或清除瀏覽資料前，先把下面的資料複製起來保存。</div>
+        <div class="row"><button type="button" class="btn" id="export-btn">產生備份資料</button><button type="button" class="btn" id="copy-btn" hidden>複製</button></div>
+        <textarea id="export-box" readonly hidden rows="6" style="font-family:var(--f-mono);font-size:12px"></textarea>
+        <div class="field">
+          <label for="import-box">還原：貼上備份資料</label>
+          <textarea id="import-box" rows="4" style="font-family:var(--f-mono);font-size:12px" placeholder='{"videos":[…]}'></textarea>
+          <div class="row"><button type="button" class="btn" id="import-btn">合併匯入</button><input type="file" id="import-file" accept=".json,application/json" class="small"><span class="hint" id="import-hint"></span></div>
+        </div>
+      </details>
+    </div>
+  </section>
+</main>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function(){
+const KEY = 'yt-timecode-notes.v1';
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- 資料 ---------- */
+function seed(){
+  const now = Date.now();
+  return { videos: [
+    { id:'dQw4w9WgXcQ', title:'Rick Astley - Never Gonna Give You Up', channel:'Rick Astley', tags:['MV','80年代','經典'], sample:true, updatedAt:now,
+      marks:[
+        {id:uid(), t:0,  note:'開場鼓點，經典前奏'},
+        {id:uid(), t:43, note:'第一次副歌，招牌舞步'},
+        {id:uid(), t:85, note:'第二段主歌，背景舞者走位'},
+        {id:uid(), t:162,note:'橋段之後的副歌高潮'}
+      ]},
+    { id:'jNQXAC9IVRw', title:'Me at the zoo', channel:'jawed', tags:['經典','YouTube歷史'], sample:true, updatedAt:now-1000,
+      marks:[
+        {id:uid(), t:0, note:'YouTube 第一支影片的開頭'},
+        {id:uid(), t:5, note:'大象的長鼻子，經典台詞'}
+      ]}
+  ]};
+}
+function load(){
+  try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); if (d && Array.isArray(d.videos)) { const sd = seed().videos; d.videos.forEach(v => { if (v.sample && v.channel === undefined) { const x = sd.find(y => y.id === v.id); if (x) { v.channel = x.channel; v.tags = x.tags; } } }); return d; } } } catch(e){}
+  return seed();
+}
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(db)); } catch(e){} }
+let db = load();
+const getVideo = id => db.videos.find(v => v.id === id);
+const sortMarks = v => v.marks.sort((a,b) => a.t - b.t);
+
+/* ---------- 解析 ---------- */
+function parseVideoId(s){
+  s = String(s||'').trim(); if (!s) return null;
+  if (/^[\w-]{11}$/.test(s)) return s;
+  try {
+    const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s);
+    const h = u.hostname.replace(/^(www|m|music)\./,'');
+    if (h === 'youtu.be') { const id = u.pathname.slice(1).split('/')[0]; return /^[\w-]{11}$/.test(id) ? id : null; }
+    if (/(^|\.)youtube(-nocookie)?\.com$/.test(h)) {
+      const v = u.searchParams.get('v'); if (v && /^[\w-]{11}$/.test(v)) return v;
+      const m = u.pathname.match(/\/(?:shorts|embed|live|v)\/([\w-]{11})/); if (m) return m[1];
+    }
+  } catch(e){}
+  return null;
+}
+function parseUrlTime(s){
+  try { const u = new URL(/^https?:\/\//i.test(s) ? s : 'https://' + s); const t = u.searchParams.get('t') || u.searchParams.get('start'); return t ? parseTime(t) : null; } catch(e){ return null; }
+}
+function parseTime(s){
+  s = String(s||'').trim().toLowerCase().replace(/\s+/g,''); if (!s) return null;
+  if (/^\d+(\.\d+)?$/.test(s)) return Math.floor(+s);
+  const m = s.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+  if (m && (m[1]||m[2]||m[3])) return (+m[1]||0)*3600 + (+m[2]||0)*60 + (+m[3]||0);
+  const p = s.split(/[:：]/);
+  if (p.length >= 2 && p.length <= 3 && p.every(x => /^\d+$/.test(x))) return p.reduce((a,x) => a*60 + +x, 0);
+  return null;
+}
+function fmt(t){
+  t = Math.max(0, Math.floor(t)); const h = Math.floor(t/3600), m = Math.floor(t%3600/60), s = t%60;
+  const ss = String(s).padStart(2,'0');
+  return h ? `${h}:${String(m).padStart(2,'0')}:${ss}` : `${m}:${ss}`;
+}
+function parseTags(s){ const out=[]; for (const t of String(s||'').split(/[\s,，、#＃]+/)) { const x=t.trim(); if (x && !out.includes(x)) out.push(x); } return out; }
+const tagStr = a => (a||[]).map(t => '#'+t).join(' ');
+const watchUrl = (id,t) => `https://www.youtube.com/watch?v=${id}` + (t ? `&t=${t}s` : '');
+
+/* ---------- 導覽 ---------- */
+let view = 'library', currentId = null;
+function show(name){
+  view = name;
+  for (const v of ['library','video','search','add']) $('#view-'+v).hidden = v !== name;
+  document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-current', b.dataset.nav === name || (name==='video' && b.dataset.nav==='library') ? 'page' : 'false'));
+  if (name !== 'video') { try { player && player.pauseVideo && player.pauseVideo(); } catch(e){} }
+  if (name === 'library') renderLibrary();
+  if (name === 'search') { renderSearch(); setTimeout(() => $('#search-input').focus(), 0); }
+  if (name === 'add') { if (!$('#entries').children.length) addEntryRow(); }
+  window.scrollTo(0,0);
+}
+let prevView = 'library';
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-nav]'); if (b) show(b.dataset.nav);
+});
+$('#back-btn').onclick = () => show(prevView === 'video' ? 'library' : prevView);
+
+/* ---------- Toast ---------- */
+let toastT;
+function toast(msg){ const el = $('#toast'); el.textContent = msg; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2200); }
+
+/* ---------- 影片庫 ---------- */
+function renderLibrary(){
+  const allTags = {}; db.videos.forEach(v => (v.tags||[]).forEach(t => allTags[t] = (allTags[t]||0) + 1));
+  if (tagFilter && !allTags[tagFilter]) tagFilter = null;
+  const names = Object.keys(allTags).sort((a,b) => allTags[b]-allTags[a] || a.localeCompare(b));
+  $('#tagbar').hidden = !names.length;
+  $('#tagbar').innerHTML = names.length ? `<span class="label">篩選</span><button class="tag" data-filter="" aria-pressed="${!tagFilter}">全部</button>` + names.map(t => `<button class="tag" data-filter="${esc(t)}" aria-pressed="${tagFilter===t}">#${esc(t)} <span class="muted">${allTags[t]}</span></button>`).join('') : '';
+  const vids = [...db.videos].filter(v => !tagFilter || (v.tags||[]).includes(tagFilter)).sort((a,b) => (b.updatedAt||0) - (a.updatedAt||0));
+  const total = vids.reduce((n,v) => n + v.marks.length, 0);
+  $('#lib-stats').textContent = vids.length ? (tagFilter ? `#${tagFilter}：` : '') + `${vids.length} 部影片 · ${total} 個時間點` : '';
+  const g = $('#lib-grid');
+  if (!vids.length) { g.innerHTML = `<div class="empty" style="grid-column:1/-1">還沒有任何紀錄。按「新增紀錄」貼上第一支 YouTube 影片網址。</div>`; return; }
+  g.innerHTML = vids.map(v => {
+    sortMarks(v);
+    const peek = v.marks.slice(0,2).map(m => `<div class="peek"><span class="tc-chip">${fmt(m.t)}</span><span>${esc(m.note)}</span></div>`).join('');
+    return `<button class="card" data-open="${v.id}">
+      <div class="thumb"><span class="ph">${v.id}</span><img src="https://i.ytimg.com/vi/${v.id}/mqdefault.jpg" alt="" loading="lazy" onerror="this.remove()"><span class="count">${v.marks.length} 個時間點</span></div>
+      <div class="card-body"><div class="row" style="gap:8px"><span class="card-title">${esc(v.title || '未命名影片')}</span>${v.sample?'<span class="chip">範例</span>':''}</div>${v.channel?`<div class="channel">${esc(v.channel)}</div>`:''}${(v.tags||[]).length?`<div class="tags">${v.tags.map(t=>`<span class="tag" data-filter="${esc(t)}">#${esc(t)}</span>`).join('')}</div>`:''}${peek}</div>
+    </button>`;
+  }).join('');
+}
+let tagFilter = null;
+$('#tagbar').addEventListener('click', e => { const b = e.target.closest('[data-filter]'); if (b) { tagFilter = b.dataset.filter || null; renderLibrary(); } });
+$('#lib-grid').addEventListener('click', e => { const tg = e.target.closest('[data-filter]'); if (tg) { e.stopPropagation(); tagFilter = tg.dataset.filter; renderLibrary(); return; } const c = e.target.closest('[data-open]'); if (c) openVideo(c.dataset.open); });
+
+/* ---------- 單一影片 ---------- */
+let editingId = null, confirmId = null, confirmVideo = false;
+function openVideo(id, t){
+  if (view !== 'video') prevView = view;
+  currentId = id; editingId = null; confirmId = null; confirmVideo = false;
+  const v = getVideo(id); if (!v) return show('library');
+  show('video');
+  $('#title-input').value = v.title || '';
+  $('#sample-chip').hidden = !v.sample;
+  $('#channel-input').value = v.channel || '';
+  $('#tags-input').value = tagStr(v.tags);
+  $('#yt-link').href = watchUrl(id);
+  $('#del-video').textContent = '刪除這部影片';
+  $('#quick-time').value = ''; $('#quick-note').value = '';
+  renderMarks();
+  loadInPlayer(id, t);
+}
+function renderMarks(){
+  const v = getVideo(currentId); if (!v) return;
+  sortMarks(v);
+  $('#mark-count').textContent = `${v.marks.length} 筆`;
+  const ul = $('#mark-list');
+  if (!v.marks.length) { ul.innerHTML = `<li class="empty">還沒有時間點。播放影片，按「記下目前時間」開始記錄。</li>`; return; }
+  ul.innerHTML = v.marks.map(m => {
+    if (m.id === editingId) return `<li class="mark editing" data-id="${m.id}"><form class="stack" style="gap:8px" data-edit="${m.id}">
+        <input type="text" class="tcin" id="edit-t-${m.id}" value="${fmt(m.t)}" aria-label="時間碼">
+        <textarea id="edit-n-${m.id}" aria-label="備註">${esc(m.note)}</textarea>
+        <div class="row"><button class="btn primary" type="submit">儲存</button><button class="btn" type="button" data-cancel>取消</button></div></form></li>`;
+    const del = confirmId === m.id ? `<button class="btn ghost danger small" data-del="${m.id}">確定刪除？</button>` : `<button class="btn ghost small" data-askdel="${m.id}" aria-label="刪除">刪除</button>`;
+    return `<li class="mark" data-id="${m.id}" data-t="${m.t}">
+      <a class="tc-chip" href="${watchUrl(v.id, m.t)}" target="_blank" rel="noopener" data-seek="${m.t}">${fmt(m.t)}</a>
+      <div class="note">${esc(m.note) || '<span class="muted">（無備註）</span>'}</div>
+      <div class="acts"><button class="btn ghost small" data-edit-btn="${m.id}">編輯</button>${del}</div></li>`;
+  }).join('');
+  highlightActive(true);
+}
+$('#mark-list').addEventListener('click', e => {
+  const v = getVideo(currentId);
+  const s = e.target.closest('[data-seek]');
+  if (s && playerReady) { e.preventDefault(); seek(+s.dataset.seek); return; }
+  const ed = e.target.closest('[data-edit-btn]'); if (ed) { editingId = ed.dataset.editBtn; confirmId = null; renderMarks(); const ta = document.getElementById('edit-n-'+editingId); ta && ta.focus(); return; }
+  if (e.target.closest('[data-cancel]')) { editingId = null; renderMarks(); return; }
+  const ask = e.target.closest('[data-askdel]'); if (ask) { confirmId = ask.dataset.askdel; renderMarks(); return; }
+  const del = e.target.closest('[data-del]'); if (del) { v.marks = v.marks.filter(m => m.id !== del.dataset.del); v.updatedAt = Date.now(); confirmId = null; save(); renderMarks(); toast('已刪除'); }
+});
+$('#mark-list').addEventListener('submit', e => {
+  e.preventDefault(); const id = e.target.dataset.edit; const v = getVideo(currentId); const m = v.marks.find(x => x.id === id);
+  const t = parseTime(document.getElementById('edit-t-'+id).value);
+  if (t === null) { toast('時間格式看不懂，例：1:23'); return; }
+  m.t = t; m.note = document.getElementById('edit-n-'+id).value.trim(); v.updatedAt = Date.now();
+  editingId = null; save(); renderMarks(); toast('已更新');
+});
+$('#title-input').addEventListener('change', e => { const v = getVideo(currentId); if (v) { v.title = e.target.value.trim(); v.titleManual = true; v.updatedAt = Date.now(); save(); toast('已更新標題'); } });
+$('#channel-input').addEventListener('change', e => { const v = getVideo(currentId); if (v) { v.channel = e.target.value.trim(); v.channelManual = true; save(); toast('已更新頻道'); } });
+$('#tags-input').addEventListener('change', e => { const v = getVideo(currentId); if (v) { v.tags = parseTags(e.target.value); e.target.value = tagStr(v.tags); save(); toast('已更新 Hashtag'); } });
+$('#del-video').onclick = () => {
+  if (!confirmVideo) { confirmVideo = true; $('#del-video').textContent = '再按一次確定刪除整部影片的紀錄'; return; }
+  db.videos = db.videos.filter(v => v.id !== currentId); save(); toast('已刪除影片'); show('library');
+};
+$('#grab-time').onclick = () => {
+  if (!playerReady) { toast('播放器還沒準備好'); return; }
+  $('#quick-time').value = fmt(player.getCurrentTime()); $('#quick-note').focus();
+};
+$('#quick-form').addEventListener('submit', e => {
+  e.preventDefault(); const v = getVideo(currentId);
+  let tStr = $('#quick-time').value; if (!tStr.trim() && playerReady) tStr = String(Math.floor(player.getCurrentTime()));
+  const t = parseTime(tStr); if (t === null) { toast('請輸入時間，例：1:23'); return; }
+  v.marks.push({ id:uid(), t, note:$('#quick-note').value.trim() }); v.updatedAt = Date.now(); save();
+  $('#quick-time').value = ''; $('#quick-note').value = ''; renderMarks(); toast(`已新增 ${fmt(t)}`);
+});
+
+/* ---------- YouTube 播放器 ---------- */
+let player = null, playerReady = false, playerVid = null, ytState = 'loading', pending = null;
+window.onYouTubeIframeAPIReady = () => { ytState = 'ready'; if (pending) { const p = pending; pending = null; loadInPlayer(p.id, p.t); } };
+(function loadApi(){
+  const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = () => { ytState = 'failed'; showFallback(); };
+  document.head.appendChild(s);
+  setTimeout(() => { if (ytState === 'loading') { ytState = 'failed'; showFallback(); } }, 6000);
+})();
+function showFallback(){
+  if (!currentId) return;
+  const fb = $('#player-fallback'); fb.hidden = false;
+  fb.innerHTML = ytState === 'failed'
+    ? `<strong>這個預覽環境無法內嵌 YouTube 播放器</strong><span>把網站放到 GitHub Pages 後，影片會直接在頁面裡播放，點時間碼就會跳到該位置。現在點時間碼會在 YouTube 新分頁開啟對應時間。</span><a href="${watchUrl(currentId)}" target="_blank" rel="noopener">在 YouTube 開啟這部影片 ↗</a>`
+    : `<span>播放器載入中…</span>`;
+}
+function loadInPlayer(id, t){
+  playerReady = playerReady && playerVid === id;
+  if (ytState !== 'ready') { pending = {id, t}; showFallback(); return; }
+  $('#player-fallback').hidden = true;
+  if (player && playerVid === id && playerReady) { if (t != null) seek(t); return; }
+  if (player && player.loadVideoById) {
+    playerVid = id; playerReady = false;
+    if (t != null) player.loadVideoById({videoId:id, startSeconds:t}); else player.cueVideoById(id);
+    return;
+  }
+  playerVid = id;
+  player = new YT.Player('yt-player', {
+    videoId:id,
+    playerVars:{ start: t || 0, autoplay: t != null ? 1 : 0, rel:0, playsinline:1, modestbranding:1 },
+    events:{
+      onReady: () => { playerReady = true; },
+      onStateChange: ev => { playerReady = true; maybeTitle(); },
+      onError: () => { toast('這支影片無法內嵌播放，請改用 YouTube 開啟'); }
+    }
+  });
+}
+function maybeTitle(){
+  try {
+    const d = player.getVideoData && player.getVideoData(); if (!d || !d.title) return;
+    const v = getVideo(playerVid); if (!v) return;
+    if (!v.title && !v.titleManual) { v.title = d.title; save(); if (currentId === v.id) $('#title-input').value = d.title; }
+    if (!v.channel && !v.channelManual && d.author) { v.channel = d.author; save(); if (currentId === v.id) $('#channel-input').value = d.author; }
+  } catch(e){}
+}
+function seek(t){
+  try { player.seekTo(t, true); player.playVideo(); } catch(e){}
+  const box = $('#player-box').getBoundingClientRect();
+  if (box.top < 0 || box.top > window.innerHeight * 0.6) $('#player-box').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'});
+  setTimeout(() => highlightActive(true), 300);
+}
+let lastActive = null;
+function highlightActive(force){
+  if (view !== 'video' || !playerReady || !player.getCurrentTime) return;
+  const cur = player.getCurrentTime(); const v = getVideo(currentId); if (!v) return;
+  let act = null; for (const m of v.marks) if (m.t <= cur + 0.5) act = m.id;
+  if (act === lastActive && !force) return; lastActive = act;
+  document.querySelectorAll('#mark-list .mark').forEach(li => li.classList.toggle('active', li.dataset.id === act));
+}
+setInterval(() => highlightActive(false), 500);
+
+/* ---------- 搜尋 ---------- */
+let searchTimer;
+$('#search-input').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(renderSearch, 120); });
+function hl(text, terms){
+  let s = esc(text); if (!terms.length) return s;
+  const re = new RegExp('(' + terms.map(t => esc(t).replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|') + ')', 'gi');
+  return s.replace(re, '<mark>$1</mark>');
+}
+function renderSearch(){
+  const q = $('#search-input').value.trim().toLowerCase();
+  const terms = q.split(/\s+/).filter(Boolean);
+  const out = $('#search-results'), sum = $('#search-summary');
+  if (!terms.length) { sum.textContent = '輸入關鍵字會同時比對備註、影片標題、頻道和 Hashtag；多個關鍵字用空白分開。'; out.innerHTML = ''; return; }
+  const groups = [];
+  for (const v of db.videos) {
+    sortMarks(v);
+    const vtext = [v.title, v.channel, ...(v.tags||[]).map(t => '#'+t)].join(' ').toLowerCase();
+    const titleHit = terms.every(t => vtext.includes(t));
+    const noteHits = v.marks.filter(m => terms.some(t => (m.note||'').toLowerCase().includes(t)) && terms.every(t => ((m.note||'').toLowerCase() + ' ' + vtext).includes(t)));
+    const list = noteHits.length ? noteHits : (titleHit ? v.marks : []);
+    if (list.length || titleHit) groups.push({v, list, titleHit});
+  }
+  const n = groups.reduce((a,g) => a + g.list.length, 0);
+  sum.textContent = groups.length ? `找到 ${groups.length} 部影片、${n} 個時間點` : `找不到含「${q}」的備註。`;
+  out.innerHTML = groups.map(({v, list}) => `<div class="result">
+      <div class="result-head"><button data-open="${v.id}">${hl(v.title || '未命名影片', terms)}</button><span class="muted small">共 ${v.marks.length} 個時間點</span></div>
+      ${(v.channel||(v.tags||[]).length)?`<div class="row small" style="gap:8px">${v.channel?`<span class="channel">${hl(v.channel,terms)}</span>`:''}${(v.tags||[]).map(t=>`<span class="tag">${hl('#'+t,terms)}</span>`).join('')}</div>`:''}
+      ${list.map(m => `<button class="hit" data-open="${v.id}" data-t="${m.t}"><span class="tc-chip">${fmt(m.t)}</span><span class="note">${hl(m.note, terms)}</span></button>`).join('')}
+    </div>`).join('');
+}
+$('#search-results').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openVideo(b.dataset.open, b.dataset.t != null ? +b.dataset.t : undefined); });
+
+/* ---------- 新增 ---------- */
+let rowN = 0;
+function addEntryRow(t, note){
+  const i = ++rowN; const div = document.createElement('div'); div.className = 'entry';
+  div.innerHTML = `<input type="text" class="tcin" id="e-t-${i}" placeholder="1:23" aria-label="時間碼" value="${t != null ? fmt(t) : ''}">
+    <textarea id="e-n-${i}" rows="1" placeholder="這段的可看點…" aria-label="備註">${esc(note||'')}</textarea>
+    <button type="button" class="btn ghost" aria-label="移除這一筆" data-rm>✕</button>`;
+  $('#entries').appendChild(div); return div;
+}
+$('#add-entry').onclick = () => addEntryRow().querySelector('input').focus();
+$('#entries').addEventListener('click', e => { if (e.target.closest('[data-rm]')) { const r = e.target.closest('.entry'); if ($('#entries').children.length > 1) r.remove(); else { r.querySelector('input').value=''; r.querySelector('textarea').value=''; } } });
+$('#add-url').addEventListener('input', () => {
+  const val = $('#add-url').value, id = parseVideoId(val), h = $('#url-hint');
+  if (!val.trim()) { h.className = 'hint'; h.textContent = '支援一般網址、youtu.be 短網址、Shorts；網址裡帶的 t= 時間會自動帶入。'; return; }
+  if (!id) { h.className = 'hint err'; h.textContent = '看不出這是哪支 YouTube 影片，請確認網址。'; return; }
+  const v = getVideo(id);
+  h.className = 'hint ok'; h.textContent = v ? `已有這部影片「${v.title || id}」（${v.marks.length} 筆），新的時間點會加進去。` : `影片 ID：${id}`;
+  if (v && !$('#add-title').value) $('#add-title').placeholder = v.title || '';
+  if (v) { $('#add-channel').placeholder = v.channel || '例：五月天 Mayday'; $('#add-tags').placeholder = v.tags && v.tags.length ? tagStr(v.tags) + '（可再加）' : '#演唱會 #現場'; }
+  const t = parseUrlTime(val); const first = $('#entries .entry .tcin');
+  if (t != null && first && !first.value) first.value = fmt(t);
+});
+$('#add-form').addEventListener('submit', e => {
+  e.preventDefault(); const err = $('#form-err'); err.textContent = '';
+  const id = parseVideoId($('#add-url').value); if (!id) { err.textContent = '請貼上有效的 YouTube 網址。'; $('#add-url').focus(); return; }
+  const rows = [...$('#entries').querySelectorAll('.entry')]; const marks = [];
+  for (const r of rows) {
+    const ts = r.querySelector('input').value, note = r.querySelector('textarea').value.trim();
+    if (!ts.trim() && !note) continue;
+    const t = parseTime(ts); if (t === null) { err.textContent = `「${ts || '(空白)'}」不是有效的時間，例：1:23`; r.querySelector('input').focus(); return; }
+    marks.push({ id:uid(), t, note });
+  }
+  if (!marks.length) { err.textContent = '至少填一筆時間點。'; return; }
+  let v = getVideo(id); const title = $('#add-title').value.trim();
+  const channel = $('#add-channel').value.trim(), tags = parseTags($('#add-tags').value);
+  if (!v) { v = { id, title, titleManual: !!title, channel, channelManual: !!channel, tags, marks:[], updatedAt:Date.now() }; db.videos.push(v); }
+  else { if (title) { v.title = title; v.titleManual = true; } if (channel) { v.channel = channel; v.channelManual = true; } v.tags = [...new Set([...(v.tags||[]), ...tags])]; }
+  v.marks.push(...marks); v.updatedAt = Date.now(); save();
+  $('#add-url').value = ''; $('#add-title').value = ''; $('#add-channel').value = ''; $('#add-tags').value = ''; $('#add-title').placeholder = '例：2025 演唱會全場'; $('#entries').innerHTML = ''; $('#url-hint').className='hint'; $('#url-hint').textContent='支援一般網址、youtu.be 短網址、Shorts；網址裡帶的 t= 時間會自動帶入。';
+  toast(`已儲存 ${marks.length} 筆`); prevView = 'add'; openVideo(id);
+});
+
+/* ---------- 備份 ---------- */
+$('#export-btn').onclick = () => { const b = $('#export-box'); b.value = JSON.stringify(db, null, 1); b.hidden = false; $('#copy-btn').hidden = false; b.select(); };
+$('#copy-btn').onclick = () => { const b = $('#export-box'); const p = navigator.clipboard && navigator.clipboard.writeText(b.value); if (p) p.then(() => toast('已複製'), () => { b.select(); toast('請按 Ctrl/⌘+C 複製'); }); else { b.select(); toast('請按 Ctrl/⌘+C 複製'); } };
+function mergeIn(text){
+  const h = $('#import-hint');
+  let d; try { d = JSON.parse(text); } catch(e){ h.className='hint err'; h.textContent = '資料格式不對，請貼上完整的備份內容。'; return; }
+  if (!d || !Array.isArray(d.videos)) { h.className='hint err'; h.textContent = '找不到影片資料。'; return; }
+  let added = 0;
+  for (const nv of d.videos) {
+    if (!nv || !/^[\w-]{11}$/.test(nv.id)) continue;
+    let v = getVideo(nv.id); if (!v) { v = { id:nv.id, title:nv.title||'', titleManual:!!nv.titleManual, channel:nv.channel||'', channelManual:!!nv.channelManual, tags:[], marks:[], updatedAt:Date.now() }; db.videos.push(v); }
+    if (!v.channel && nv.channel) v.channel = nv.channel;
+    v.tags = [...new Set([...(v.tags||[]), ...(Array.isArray(nv.tags) ? nv.tags.map(String) : [])])];
+    for (const m of (nv.marks||[])) { if (typeof m.t !== 'number') continue; if (!v.marks.some(x => x.t === m.t && x.note === m.note)) { v.marks.push({ id:uid(), t:m.t, note:String(m.note||'') }); added++; } }
+  }
+  save(); h.className='hint ok'; h.textContent = `已匯入 ${added} 筆新時間點。`;
+}
+$('#import-btn').onclick = () => mergeIn($('#import-box').value);
+$('#import-file').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => mergeIn(r.result); r.readAsText(f); };
+
+show('library');
+})();
+</script>
+
+</body>
+</html>
