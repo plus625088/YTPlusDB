@@ -1,0 +1,55 @@
+rules_version = '2';
+// 影片時間碼筆記的 Firestore 安全規則
+// - 任何人都能讀取、新增影片和時間點
+// - 只有管理者（下面列出的 Google 帳號）能修改或刪除
+// 使用前把 ADMIN@gmail.com 換成你自己的 Google 帳號（可列多個）
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['ADMIN@gmail.com'];
+    }
+    function str(v, max) { return v is string && v.size() <= max; }
+    function tagList(v) { return v is list && v.size() <= 30; }
+
+    match /videos/{videoId} {
+      allow read: if true;
+
+      allow create: if videoId.matches('^[A-Za-z0-9_-]{11}$')
+        && request.resource.data.keys().hasOnly(['title', 'channel', 'tags', 'createdBy', 'createdAt', 'updatedAt'])
+        && str(request.resource.data.title, 200)
+        && str(request.resource.data.channel, 100)
+        && tagList(request.resource.data.tags)
+        && str(request.resource.data.createdBy, 40);
+
+      // 一般人：只能更新時間、追加 Hashtag、補上原本空白的標題或頻道
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'tags', 'title', 'channel'])
+        && tagList(request.resource.data.tags)
+        && request.resource.data.tags.hasAll(resource.data.tags)
+        && str(request.resource.data.title, 200)
+        && str(request.resource.data.channel, 100)
+        && (request.resource.data.title == resource.data.title || resource.data.title == '')
+        && (request.resource.data.channel == resource.data.channel || resource.data.channel == '')
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /marks/{markId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly(['videoId', 't', 'note', 'author', 'createdAt'])
+        && request.resource.data.videoId is string
+        && existsAfter(/databases/$(database)/documents/videos/$(request.resource.data.videoId))
+        && request.resource.data.t is int && request.resource.data.t >= 0 && request.resource.data.t < 360000
+        && str(request.resource.data.note, 2000)
+        && request.resource.data.author is string
+        && request.resource.data.author.size() >= 1 && request.resource.data.author.size() <= 40;
+
+      allow update, delete: if isAdmin();
+    }
+  }
+}
