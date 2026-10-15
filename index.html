@@ -126,6 +126,7 @@ a.tc-chip:hover{outline:1px solid var(--tc-fg)}
 .mark.active{background:var(--active);box-shadow:inset 3px 0 0 var(--accent)}
 .mark .note{white-space:pre-wrap;overflow-wrap:anywhere;padding-top:1px}
 .mark .by{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.mine{font-size:11px;margin-left:6px;padding:0 6px;border-radius:999px;background:var(--tc-bg);color:var(--tc-fg);font-weight:500}
 .mark .acts{display:flex;gap:2px;opacity:.55}
 .mark:hover .acts,.mark:focus-within .acts{opacity:1}
 .mark.editing{grid-template-columns:minmax(0,1fr)}
@@ -337,7 +338,9 @@ const lsSet = (k,v) => { try { localStorage.setItem(k,v); } catch(e){} };
 let db = { videos: [] };          // 畫面用的資料：videos[{id,title,channel,tags,updatedAt,sample,marks:[{id,t,note,author}]}]
 let loaded = false;
 let user = null;                  // Firebase 登入者
-const isAdmin = () => !CLOUD || (!!user && ADMIN_EMAILS.map(e => e.toLowerCase()).includes((user.email||'').toLowerCase()));
+const myUid = () => (user && user.uid) || null;
+const canEditMark = m => isAdmin() || (!!m.uid && m.uid === myUid());
+const isAdmin = () => !CLOUD || (!!user && !user.isAnonymous && ADMIN_EMAILS.map(e => e.toLowerCase()).includes((user.email||'').toLowerCase()));
 const getVideo = id => db.videos.find(v => v.id === id);
 const sortMarks = v => v.marks.sort((a,b) => a.t - b.t);
 
@@ -410,14 +413,32 @@ async function makeCloudStore(){
     const vids = [];
     for (const [id, d] of videosMap) vids.push({ id, title:d.title||'', channel:d.channel||'', tags:d.tags||[], updatedAt:ms(d.updatedAt), marks:[] });
     const byId = new Map(vids.map(v => [v.id, v]));
-    for (const [id, m] of marksMap) { const v = byId.get(m.videoId); if (v) v.marks.push({ id, t:m.t, note:m.note||'', author:m.author||'' }); }
+    for (const [id, m] of marksMap) { const v = byId.get(m.videoId); if (v) v.marks.push({ id, t:m.t, note:m.note||'', author:m.author||'', uid:m.uid||'' }); }
     db = { videos: vids }; loaded = true; onData();
   }
   const onErr = e => { console.error(e); toast('讀取資料失敗：' + (e.code || e.message)); };
 
-  au.onAuthStateChanged(auth, u => { user = u; renderAuth(); onData(); });
-  window.__signIn = async () => { try { await au.signInWithPopup(auth, new au.GoogleAuthProvider()); if (!isAdmin()) toast('這個帳號不是管理者，只能新增紀錄'); } catch(e){ if (e.code !== 'auth/popup-closed-by-user') toast('登入失敗：' + (e.code || e.message)); } };
+  au.onAuthStateChanged(auth, u => {
+    user = u; renderAuth(); onData();
+    if (!u) au.signInAnonymously(auth).catch(e => console.warn('匿名登入未啟用，無法記住自己新增的時間點', e.code));
+  });
+  window.__signIn = async () => {
+    const provider = new au.GoogleAuthProvider();
+    try {
+      if (auth.currentUser && auth.currentUser.isAnonymous) {
+        try { await au.linkWithPopup(auth.currentUser, provider); await auth.currentUser.reload(); user = auth.currentUser; renderAuth(); onData(); }
+        catch(e){
+          if (e.code === 'auth/credential-already-in-use' || e.code === 'auth/email-already-in-use') {
+            const cred = au.GoogleAuthProvider.credentialFromError(e);
+            if (cred) await au.signInWithCredential(auth, cred); else await au.signInWithPopup(auth, provider);
+          } else throw e;
+        }
+      } else await au.signInWithPopup(auth, provider);
+      if (!isAdmin()) toast('這個帳號不是管理者，只能新增和修改自己的紀錄');
+    } catch(e){ if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') toast('登入失敗：' + (e.code || e.message)); }
+  };
   window.__signOut = () => au.signOut(auth);
+  const withUid = o => (auth.currentUser ? { ...o, uid: auth.currentUser.uid } : o);
 
   const V = id => doc(fdb, 'videos', id);
   const M = id => doc(fdb, 'marks', id);
@@ -438,12 +459,12 @@ async function makeCloudStore(){
         if (channel && (isAdmin() || !old.channel)) p.channel = channel;
         b.update(V(id), p);
       }
-      marks.forEach(m => b.set(doc(collection(fdb, 'marks')), { videoId:id, t:m.t, note:m.note, author, createdAt:serverTimestamp() }));
+      marks.forEach(m => b.set(doc(collection(fdb, 'marks')), withUid({ videoId:id, t:m.t, note:m.note, author, createdAt:serverTimestamp() })));
       await b.commit();
     },
     async addMark(videoId, t, note, author){
       const b = writeBatch(fdb);
-      b.set(doc(collection(fdb, 'marks')), { videoId, t, note, author, createdAt:serverTimestamp() });
+      b.set(doc(collection(fdb, 'marks')), withUid({ videoId, t, note, author, createdAt:serverTimestamp() }));
       b.update(V(videoId), { updatedAt:serverTimestamp() });
       await b.commit();
     },
@@ -527,7 +548,7 @@ function renderAuth(){
   const a = $('#auth-area');
   if (!CLOUD) { a.hidden = true; return; }
   a.hidden = false;
-  if (user) a.innerHTML = `${isAdmin() ? '<span class="admin-badge">管理者</span>' : ''}<span class="muted">${esc(user.displayName || user.email)}</span><button class="btn ghost sm" id="signout-btn">登出</button>`;
+  if (user && !user.isAnonymous) a.innerHTML = `${isAdmin() ? '<span class="admin-badge">管理者</span>' : ''}<span class="muted">${esc(user.displayName || user.email)}</span><button class="btn ghost sm" id="signout-btn">登出</button>`;
   else a.innerHTML = `<button class="btn ghost sm" id="signin-btn">管理者登入</button>`;
 }
 $('#auth-area').addEventListener('click', e => {
@@ -635,14 +656,17 @@ function renderMarks(){
   const ul = $('#mark-list');
   if (!v.marks.length) { ul.innerHTML = `<li class="empty">還沒有時間點。播放影片，按「記下目前時間」開始記錄。</li>`; return; }
   ul.innerHTML = v.marks.map(m => {
-    if (m.id === editingId && admin) return `<li class="mark editing" data-id="${m.id}"><form class="stack" style="gap:8px" data-edit="${m.id}">
+    const mine = CLOUD && !!m.uid && m.uid === myUid();
+    if (m.id === editingId && canEditMark(m)) return `<li class="mark editing" data-id="${m.id}"><form class="stack" style="gap:8px" data-edit="${m.id}">
         <input type="text" class="tcin" id="edit-t-${m.id}" value="${fmt(m.t)}" aria-label="時間碼">
         <textarea id="edit-n-${m.id}" aria-label="備註">${esc(m.note)}</textarea>
         <div class="row"><button class="btn primary" type="submit">儲存</button><button class="btn" type="button" data-cancel>取消</button></div></form></li>`;
-    const acts = admin ? `<div class="acts"><button class="btn ghost small" data-edit-btn="${m.id}">編輯</button>${confirmId === m.id ? `<button class="btn ghost danger small" data-del="${m.id}">確定刪除？</button>` : `<button class="btn ghost small" data-askdel="${m.id}">刪除</button>`}</div>` : '<span></span>';
+    const editBtn = canEditMark(m) ? `<button class="btn ghost small" data-edit-btn="${m.id}">編輯</button>` : '';
+    const delBtn = admin ? (confirmId === m.id ? `<button class="btn ghost danger small" data-del="${m.id}">確定刪除？</button>` : `<button class="btn ghost small" data-askdel="${m.id}">刪除</button>`) : '';
+    const acts = (editBtn || delBtn) ? `<div class="acts">${editBtn}${delBtn}</div>` : '<span></span>';
     return `<li class="mark" data-id="${m.id}">
       <a class="tc-chip" href="${watchUrl(v.id, m.t)}" target="_blank" rel="noopener" data-seek="${m.t}">${fmt(m.t)}</a>
-      <div class="note">${esc(m.note) || '<span class="muted">（無備註）</span>'}${m.author ? `<span class="by">— ${esc(m.author)}</span>` : ''}</div>
+      <div class="note">${esc(m.note) || '<span class="muted">（無備註）</span>'}${(m.author || mine) ? `<span class="by">${m.author ? '— ' + esc(m.author) : ''}${mine ? '<span class="mine">你新增的</span>' : ''}</span>` : ''}</div>
       ${acts}</li>`;
   }).join('');
   lastActive = undefined; highlightActive(true);
