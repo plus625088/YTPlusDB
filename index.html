@@ -145,6 +145,24 @@ a.tc-chip:hover{outline:1px solid var(--tc-fg)}
 .cform textarea,.comment textarea{min-height:38px;font-size:14px;padding:7px 10px}
 .cform .row{gap:6px;flex-wrap:nowrap}
 .cform input{flex:1 1 auto;width:auto;min-width:0;padding:6px 10px;font-size:14px}
+.imp-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;max-width:980px}
+.drop{border:2px dashed var(--line);border-radius:var(--r);padding:28px 16px;text-align:center;color:var(--muted);background:var(--surface);cursor:pointer;display:flex;flex-direction:column;gap:6px;align-items:center}
+.drop.over,.drop:hover{border-color:var(--accent);color:var(--fg)}
+.drop strong{color:var(--fg)}
+.imp-sum{display:flex;gap:10px;flex-wrap:wrap}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 14px;display:flex;flex-direction:column;min-width:96px}
+.stat b{font-size:20px;font-variant-numeric:tabular-nums;line-height:1.2}
+.stat span{font-size:12px;color:var(--muted)}
+.stat.bad b{color:var(--danger)}
+.tbl-wrap{overflow:auto;max-height:60vh;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table.prev{border-collapse:collapse;width:100%;font-size:13px;min-width:760px}
+table.prev th{position:sticky;top:0;background:var(--surface-2);text-align:left;font-weight:500;color:var(--muted);padding:8px 10px;white-space:nowrap}
+table.prev td{padding:7px 10px;border-top:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+table.prev td.num{font-variant-numeric:tabular-nums;color:var(--muted)}
+.st-ok{color:var(--tc-fg);font-weight:500;white-space:nowrap}
+.st-skip{color:var(--muted);white-space:nowrap}
+.st-err{color:var(--danger)}
+tr.err td{background:var(--danger-bg)}
 .hit-c{display:block;font-size:13px;color:var(--muted);margin-top:2px}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
 
@@ -191,6 +209,7 @@ details.panel summary{cursor:pointer;font-weight:700}
         <button data-nav="library" id="nav-library">影片庫</button>
         <button data-nav="search" id="nav-search">搜尋備註</button>
         <button data-nav="add" id="nav-add">新增紀錄</button>
+        <button data-nav="import" id="nav-import" hidden>批次匯入</button>
       </nav>
       <div class="auth" id="auth-area" hidden></div>
     </div>
@@ -318,6 +337,41 @@ details.panel summary{cursor:pointer;font-weight:700}
       </details>
     </div>
   </section>
+
+  <!-- 批次匯入（管理者） -->
+  <section id="view-import" hidden>
+    <div class="row" style="gap:10px;margin-bottom:6px"><h1>批次匯入</h1><span class="admin-badge">管理者</span></div>
+    <p class="muted" style="margin:0 0 18px;max-width:70ch">用 Excel 一次匯入多部影片和時間點。上傳後會先列出預覽和檢查結果，確認沒問題再按匯入。</p>
+    <div class="imp-steps">
+      <div class="panel" style="gap:12px">
+        <h2>1. 下載範本</h2>
+        <div class="hint">一列填一個時間點，同一部影片的網址重複填即可。「說明」工作表有每個欄位的填法。</div>
+        <div><a class="btn" href="template.xlsx" download="影片時間碼匯入範本.xlsx">⬇ 下載 Excel 範本</a></div>
+        <div class="field">
+          <label for="imp-author">預設建立者</label>
+          <input type="text" id="imp-author" maxlength="40" placeholder="建立者欄位空白時使用">
+        </div>
+      </div>
+      <div class="panel" style="gap:12px">
+        <h2>2. 上傳檔案</h2>
+        <label class="drop" id="imp-drop" for="imp-file">
+          <strong>點這裡選擇檔案，或把檔案拖進來</strong>
+          <span class="small">支援 .xlsx、.xls、.csv</span>
+          <span class="small" id="imp-filename"></span>
+        </label>
+        <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" hidden>
+      </div>
+    </div>
+    <div class="stack" id="imp-result" style="margin-top:24px" hidden>
+      <h2>3. 檢查並匯入</h2>
+      <div class="imp-sum" id="imp-sum"></div>
+      <div class="tbl-wrap"><table class="prev"><thead><tr><th>列</th><th>影片</th><th>時間</th><th>可看點備註</th><th>建立者</th><th>Hashtag</th><th>狀態</th></tr></thead><tbody id="imp-rows"></tbody></table></div>
+      <div class="row">
+        <button class="btn primary" id="imp-go" disabled>匯入</button>
+        <span class="hint" id="imp-progress"></span>
+      </div>
+    </div>
+  </section>
 </main>
 
 <div class="toast" id="toast" hidden></div>
@@ -410,6 +464,7 @@ function makeLocalStore(){
     async deleteComment(videoId, cid){ for (const m of vid(videoId).marks) m.comments = (m.comments||[]).filter(x => x.id !== cid); persist(); },
     async importData(d){ let n = 0; for (const nv of d.videos) { let v = vid(nv.id); if (!v) { v = {id:nv.id, title:nv.title||'', channel:nv.channel||'', tags:[], marks:[], updatedAt:Date.now()}; data.videos.push(v); }
         v.tags = [...new Set([...(v.tags||[]), ...(nv.tags||[])])];
+        if (!v.title && nv.title) v.title = nv.title; if (!v.channel && nv.channel) v.channel = nv.channel; v.updatedAt = Date.now();
         for (const m of nv.marks||[]) if (!v.marks.some(x => x.t === m.t && x.note === m.note)) { v.marks.push({id:uid(), t:m.t, note:String(m.note||''), author:String(m.author||''), comments:(m.comments||[]).map(c => ({ id:uid(), text:String(c.text||''), author:String(c.author||''), createdAt:Date.now() }))}); n++; } }
       persist(); return n; }
   };
@@ -517,7 +572,13 @@ async function makeCloudStore(){
       const flush = async () => { if (ops) { await b.commit(); b = writeBatch(fdb); ops = 0; } };
       for (const nv of d.videos) {
         if (!videosMap.has(nv.id)) { b.set(V(nv.id), { title:nv.title||'', channel:nv.channel||'', tags:nv.tags||[], createdBy:'匯入', createdAt:serverTimestamp(), updatedAt:serverTimestamp() }); ops++; }
-        else if ((nv.tags||[]).length) { b.update(V(nv.id), { tags:arrayUnion(...nv.tags) }); ops++; }
+        else {
+          const old = videosMap.get(nv.id), p = {};
+          if ((nv.tags||[]).length) p.tags = arrayUnion(...nv.tags);
+          if (!old.title && nv.title) p.title = nv.title;
+          if (!old.channel && nv.channel) p.channel = nv.channel;
+          if (Object.keys(p).length) { p.updatedAt = serverTimestamp(); b.update(V(nv.id), p); ops++; }
+        }
         const existing = [...marksMap.values()].filter(m => m.videoId === nv.id);
         for (const m of nv.marks||[]) {
           if (existing.some(x => x.t === m.t && x.note === m.note)) continue;
@@ -607,18 +668,22 @@ function onData(){
     renderVideoMeta(); renderMarks();
   }
   $('#import-area').hidden = !isAdmin();
+  $('#nav-import').hidden = !isAdmin();
+  if (view === 'import' && !isAdmin()) show('library');
 }
 
 /* ---------- 導覽 ---------- */
 let view = 'library', currentId = null, prevView = 'library';
 function show(name){
+  if (name === 'import' && !isAdmin()) name = 'library';
   view = name;
-  for (const v of ['library','video','search','add']) $('#view-'+v).hidden = v !== name;
+  for (const v of ['library','video','search','add','import']) $('#view-'+v).hidden = v !== name;
   document.querySelectorAll('nav button').forEach(b => b.setAttribute('aria-current', b.dataset.nav === name || (name==='video' && b.dataset.nav==='library') ? 'page' : 'false'));
   if (name !== 'video') { try { player && player.pauseVideo && player.pauseVideo(); } catch(e){} }
   if (name === 'library') renderLibrary();
   if (name === 'search') { renderSearch(); setTimeout(() => $('#search-input').focus(), 0); }
   if (name === 'add') { if (!$('#entries').children.length) addEntryRow(); resetUrlHint(); }
+  if (name === 'import') { if (!$('#imp-author').value) $('#imp-author').value = getName(); loadSheetJS().catch(() => {}); }
   window.scrollTo(0,0);
 }
 document.addEventListener('click', e => { const b = e.target.closest('[data-nav]'); if (b) show(b.dataset.nav); });
@@ -1050,6 +1115,120 @@ async function mergeIn(text){
 }
 $('#import-btn').onclick = () => mergeIn($('#import-box').value);
 $('#import-file').onchange = e => { const f = e.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => mergeIn(r.result); r.readAsText(f); };
+
+/* ---------- 批次匯入（管理者） ---------- */
+let sheetJsPromise = null;
+function loadSheetJS(){
+  if (window.XLSX) return Promise.resolve();
+  if (!sheetJsPromise) sheetJsPromise = new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload = () => res(); sc.onerror = () => { sheetJsPromise = null; rej(new Error('無法載入 Excel 讀取元件')); };
+    document.head.appendChild(sc);
+  });
+  return sheetJsPromise;
+}
+const COLS = { url:['網址','url','連結','link'], t:['時間','timecode','time'], note:['備註','可看點','note'], author:['建立者','作者','author'], tags:['hashtag','標籤','tag'], title:['標題','title'], channel:['頻道','channel'] };
+let importPlan = null, lastRows = null;
+function findHeader(rows){
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const map = {};
+    rows[r].forEach((h, i) => { const k = String(h||'').toLowerCase(); for (const f in COLS) if (map[f] == null && COLS[f].some(w => k.includes(w))) { map[f] = i; break; } });
+    if (map.url != null && map.t != null) return { row:r, map };
+  }
+  return { row:-1, map:{ url:0, t:1, note:2, author:3, tags:4, title:5, channel:6 } };
+}
+async function handleImportFile(file){
+  if (!file) return;
+  $('#imp-filename').textContent = file.name;
+  $('#imp-progress').textContent = '讀取中…'; $('#imp-result').hidden = false;
+  try { await loadSheetJS(); } catch(e){ $('#imp-progress').textContent = e.message + '，請確認網路連線後再試一次。'; return; }
+  let rows;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { type:'array' });
+    const ws = wb.Sheets['時間點'] || wb.Sheets[wb.SheetNames[0]];
+    rows = XLSX.utils.sheet_to_json(ws, { header:1, raw:false, defval:'', blankrows:false });
+  } catch(e){ $('#imp-progress').textContent = '讀不懂這個檔案，請確認是 Excel 或 CSV 格式。'; return; }
+  buildPlan(rows);
+}
+function buildPlan(rows){
+  lastRows = rows;
+  const { row:hr, map } = findHeader(rows);
+  const defAuthor = $('#imp-author').value.trim().slice(0,40);
+  const cell = (r, f) => map[f] == null ? '' : String(r[map[f]] ?? '').trim();
+  const items = [], seen = new Set();
+  for (let i = hr + 1; i < rows.length; i++) {
+    const r = rows[i]; const line = i + 1;
+    const url = cell(r,'url'), ts = cell(r,'t'), note = cell(r,'note').slice(0,2000);
+    if (!url && !ts && !note) continue;
+    const author = (cell(r,'author') || defAuthor).slice(0,40);
+    const it = { line, url, ts, note, author, tags:parseTags(cell(r,'tags')), title:cell(r,'title').slice(0,200), channel:cell(r,'channel').slice(0,100) };
+    if (it.author === '範例') { it.status = 'skip'; it.msg = '範例列，略過'; items.push(it); continue; }
+    it.id = parseVideoId(url); it.t = parseTime(ts);
+    if (!it.id) { it.status = 'err'; it.msg = url ? '網址看不懂' : '缺少影片網址'; }
+    else if (it.t === null) { it.status = 'err'; it.msg = ts ? `時間碼「${ts}」看不懂` : '缺少時間碼'; }
+    else if (!it.author) { it.status = 'err'; it.msg = '缺少建立者（可填上方的預設建立者）'; }
+    else {
+      const key = it.id + '|' + it.t + '|' + it.note;
+      const v = getVideo(it.id);
+      if (seen.has(key) || (v && v.marks.some(m => m.t === it.t && m.note === it.note))) { it.status = 'skip'; it.msg = '已存在，略過'; }
+      else { seen.add(key); it.status = 'ok'; it.msg = v ? '新增到現有影片' : '新影片'; }
+    }
+    items.push(it);
+  }
+  importPlan = items;
+  renderPlan();
+}
+function renderPlan(){
+  const items = importPlan || [];
+  const ok = items.filter(i => i.status === 'ok'), err = items.filter(i => i.status === 'err'), skip = items.filter(i => i.status === 'skip');
+  const vids = new Set(ok.map(i => i.id)), newVids = [...vids].filter(id => !getVideo(id));
+  $('#imp-sum').innerHTML = `
+    <div class="stat"><b>${ok.length}</b><span>個時間點會匯入</span></div>
+    <div class="stat"><b>${vids.size}</b><span>部影片（新 ${newVids.length}）</span></div>
+    <div class="stat"><b>${skip.length}</b><span>列略過</span></div>
+    <div class="stat${err.length ? ' bad' : ''}"><b>${err.length}</b><span>列有錯誤</span></div>`;
+  const label = id => { const v = getVideo(id); return v && v.title ? esc(v.title) : `<span class="muted">${esc(id)}</span>`; };
+  $('#imp-rows').innerHTML = items.length ? items.map(i => `<tr class="${i.status === 'err' ? 'err' : ''}">
+      <td class="num">${i.line}</td>
+      <td>${i.id ? label(i.id) : esc(i.url) || '<span class="muted">（空白）</span>'}${i.title && !(getVideo(i.id)||{}).title ? `<div class="small muted">${esc(i.title)}</div>` : ''}</td>
+      <td>${i.t != null ? `<span class="tc-chip">${fmt(i.t)}</span>` : esc(i.ts)}</td>
+      <td>${esc(i.note)}</td><td>${esc(i.author)}</td><td>${esc(tagStr(i.tags))}</td>
+      <td class="${i.status === 'ok' ? 'st-ok' : i.status === 'err' ? 'st-err' : 'st-skip'}">${i.status === 'ok' ? '✓ ' : i.status === 'err' ? '✕ ' : ''}${esc(i.msg)}</td></tr>`).join('')
+    : `<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">檔案裡沒有找到資料列。</td></tr>`;
+  const go = $('#imp-go');
+  go.disabled = !ok.length;
+  go.textContent = ok.length ? `匯入 ${ok.length} 個時間點` : '沒有可匯入的資料';
+  $('#imp-progress').textContent = err.length ? '有錯誤的列不會匯入。可以修改 Excel 後重新上傳，或直接匯入其餘的列。' : '';
+}
+$('#imp-file').addEventListener('change', e => { handleImportFile(e.target.files[0]); e.target.value = ''; });
+const drop = $('#imp-drop');
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleImportFile(e.dataTransfer.files[0]));
+$('#imp-author').addEventListener('change', () => { if (lastRows) buildPlan(lastRows); });
+$('#imp-go').onclick = async () => {
+  if (!isAdmin()) { toast('只有管理者能匯入'); return; }
+  const ok = (importPlan || []).filter(i => i.status === 'ok'); if (!ok.length) return;
+  const go = $('#imp-go'), prog = $('#imp-progress'); go.disabled = true;
+  const byVid = new Map();
+  for (const i of ok) {
+    if (!byVid.has(i.id)) byVid.set(i.id, { id:i.id, title:'', channel:'', tags:[], marks:[] });
+    const v = byVid.get(i.id);
+    if (!v.title && i.title) v.title = i.title; if (!v.channel && i.channel) v.channel = i.channel;
+    v.tags = [...new Set([...v.tags, ...i.tags])].slice(0,30);
+    v.marks.push({ t:i.t, note:i.note, author:i.author });
+  }
+  const need = [...byVid.values()].filter(v => { const ex = getVideo(v.id); return !(v.title || (ex && ex.title)) || !(v.channel || (ex && ex.channel)); });
+  let done = 0;
+  const worker = async () => { while (need.length) { const v = need.shift(); const m = await fetchMeta(v.id).catch(() => null); if (m) { if (!v.title) v.title = m.title.slice(0,200); if (!v.channel) v.channel = (m.channel||'').slice(0,100); } done++; prog.textContent = `抓取影片標題與頻道… ${done}/${done + need.length}`; } };
+  if (need.length) { prog.textContent = '抓取影片標題與頻道…'; await Promise.all([worker(), worker(), worker(), worker()]); }
+  prog.textContent = '寫入中…';
+  let n = 0;
+  const success = await run(async () => { n = await store.importData({ videos:[...byVid.values()] }); });
+  if (success) { prog.textContent = `完成：匯入 ${n} 個時間點、${byVid.size} 部影片。`; toast(`已匯入 ${n} 個時間點`); importPlan.forEach(i => { if (i.status === 'ok') { i.status = 'skip'; i.msg = '已匯入'; } }); renderPlan(); prog.textContent = `完成：匯入 ${n} 個時間點、${byVid.size} 部影片。`; }
+  else { prog.textContent = '匯入失敗，請確認已用管理者帳號登入，然後再試一次。'; go.disabled = false; }
+};
 
 /* ---------- 啟動 ---------- */
 setName(getName());
