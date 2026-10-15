@@ -1,7 +1,8 @@
 rules_version = '2';
 // 影片時間碼筆記的 Firestore 安全規則
 // - 任何人都能讀取、新增影片和時間點
-// - 每個瀏覽器（匿名登入）可以修改自己新增的時間點
+// - 任何人都能對時間點留下補充或評論
+// - 每個瀏覽器（匿名登入）可以修改自己新增的時間點和補充
 // - 只有管理者（下面列出的 Google 帳號）能修改所有內容、刪除
 // 管理者 Google 帳號列在 isAdmin() 裡，可列多個
 service cloud.firestore {
@@ -58,6 +59,29 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['t', 'note'])
         && request.resource.data.t is int && request.resource.data.t >= 0 && request.resource.data.t < 360000
         && str(request.resource.data.note, 2000)
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    match /comments/{commentId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.keys().hasOnly(['videoId', 'markId', 'text', 'author', 'createdAt', 'uid'])
+        && (!('uid' in request.resource.data) || (request.auth != null && request.resource.data.uid == request.auth.uid))
+        && request.resource.data.videoId is string
+        && request.resource.data.markId is string
+        && existsAfter(/databases/$(database)/documents/marks/$(request.resource.data.markId))
+        && str(request.resource.data.text, 2000) && request.resource.data.text.size() >= 1
+        && request.resource.data.author is string
+        && request.resource.data.author.size() >= 1 && request.resource.data.author.size() <= 40;
+
+      // 留言者本人（同一個瀏覽器）只能改內容
+      allow update: if isAdmin() || (
+        request.auth != null
+        && 'uid' in resource.data && resource.data.uid == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['text'])
+        && str(request.resource.data.text, 2000) && request.resource.data.text.size() >= 1
       );
 
       allow delete: if isAdmin();

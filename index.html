@@ -81,7 +81,7 @@ a.tc-chip:hover{outline:1px solid var(--tc-fg)}
 .tags{display:flex;flex-wrap:wrap;gap:6px}
 .channel{font-size:13px;color:var(--muted);overflow-wrap:anywhere}
 .tagbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:16px}
-.chip{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:500}
+.chip{white-space:nowrap;flex:none;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted);font-weight:500}
 
 /* Library */
 .lib-head{display:flex;justify-content:space-between;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:18px}
@@ -130,6 +130,22 @@ a.tc-chip:hover{outline:1px solid var(--tc-fg)}
 .mark .acts{display:flex;gap:2px;opacity:.55}
 .mark:hover .acts,.mark:focus-within .acts{opacity:1}
 .mark.editing{grid-template-columns:minmax(0,1fr)}
+.thread{grid-column:2 / -1;display:flex;flex-direction:column;gap:8px;min-width:0}
+.thread-toggle{align-self:flex-start;background:none;border:0;padding:2px 0;color:var(--muted);font-size:12px;cursor:pointer;font-weight:500}
+.thread-toggle:hover{color:var(--fg)}
+.thread-toggle[aria-expanded="true"]{color:var(--tc-fg)}
+.thread-body{display:flex;flex-direction:column;gap:10px;border-left:2px solid var(--line);padding-left:12px}
+.comment{display:flex;flex-direction:column;gap:2px;font-size:14px;min-width:0}
+.ctext{white-space:pre-wrap;overflow-wrap:anywhere}
+.cmeta{font-size:12px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.linkbtn{background:none;border:0;padding:0;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline}
+.linkbtn:hover{color:var(--fg)}
+.linkbtn.danger{color:var(--danger)}
+.cform{display:flex;flex-direction:column;gap:6px}
+.cform textarea,.comment textarea{min-height:38px;font-size:14px;padding:7px 10px}
+.cform .row{gap:6px;flex-wrap:nowrap}
+.cform input{flex:1 1 auto;width:auto;min-width:0;padding:6px 10px;font-size:14px}
+.hit-c{display:block;font-size:13px;color:var(--muted);margin-top:2px}
 .empty{padding:28px 16px;text-align:center;color:var(--muted)}
 
 /* Search */
@@ -233,7 +249,7 @@ details.panel summary{cursor:pointer;font-weight:700}
         </form>
       </div>
       <aside class="rail">
-        <div class="rail-head"><h2>時間點</h2><span class="muted small" id="mark-count"></span></div>
+        <div class="rail-head"><div class="row" style="gap:8px"><h2>時間點</h2><span class="muted small" id="mark-count"></span></div><button class="btn sm" id="toggle-all" hidden>全部展開</button></div>
         <ul class="marks" id="mark-list"></ul>
       </aside>
     </div>
@@ -371,7 +387,7 @@ function makeLocalStore(){
   let data;
   try { const s = lsGet(LOCAL_KEY); data = s ? JSON.parse(s) : null; } catch(e){ data = null; }
   if (!data || !Array.isArray(data.videos)) data = seed();
-  data.videos.forEach(v => { v.tags = v.tags || []; v.channel = v.channel || ''; v.marks.forEach(m => m.author = m.author || ''); });
+  data.videos.forEach(v => { v.tags = v.tags || []; v.channel = v.channel || ''; v.marks.forEach(m => { m.author = m.author || ''; m.comments = m.comments || []; }); });
   const persist = () => { lsSet(LOCAL_KEY, JSON.stringify(data)); db = data; onData(); };
   const vid = id => data.videos.find(v => v.id === id);
   return {
@@ -389,9 +405,12 @@ function makeLocalStore(){
     async updateVideo(id, patch){ Object.assign(vid(id), patch); persist(); },
     async fillEmpty(id, patch){ const v = vid(id); let ch = false; for (const k in patch) if (!v[k] && patch[k]) { v[k] = patch[k]; ch = true; } if (ch) persist(); },
     async deleteVideo(id){ data.videos = data.videos.filter(v => v.id !== id); persist(); },
+    async addComment(videoId, markId, text, author){ const m = vid(videoId).marks.find(x => x.id === markId); (m.comments = m.comments || []).push({ id:uid(), text, author, createdAt:Date.now() }); persist(); },
+    async updateComment(videoId, cid, patch){ for (const m of vid(videoId).marks) { const c = (m.comments||[]).find(x => x.id === cid); if (c) Object.assign(c, patch); } persist(); },
+    async deleteComment(videoId, cid){ for (const m of vid(videoId).marks) m.comments = (m.comments||[]).filter(x => x.id !== cid); persist(); },
     async importData(d){ let n = 0; for (const nv of d.videos) { let v = vid(nv.id); if (!v) { v = {id:nv.id, title:nv.title||'', channel:nv.channel||'', tags:[], marks:[], updatedAt:Date.now()}; data.videos.push(v); }
         v.tags = [...new Set([...(v.tags||[]), ...(nv.tags||[])])];
-        for (const m of nv.marks||[]) if (!v.marks.some(x => x.t === m.t && x.note === m.note)) { v.marks.push({id:uid(), t:m.t, note:String(m.note||''), author:String(m.author||'')}); n++; } }
+        for (const m of nv.marks||[]) if (!v.marks.some(x => x.t === m.t && x.note === m.note)) { v.marks.push({id:uid(), t:m.t, note:String(m.note||''), author:String(m.author||''), comments:(m.comments||[]).map(c => ({ id:uid(), text:String(c.text||''), author:String(c.author||''), createdAt:Date.now() }))}); n++; } }
       persist(); return n; }
   };
 }
@@ -405,15 +424,18 @@ async function makeCloudStore(){
   const app = initializeApp(FIREBASE_CONFIG);
   const fdb = getFirestore(app);
   const auth = au.getAuth(app);
-  const videosMap = new Map(), marksMap = new Map();
-  let gotV = false, gotM = false;
+  const videosMap = new Map(), marksMap = new Map(), commentsMap = new Map();
+  let gotV = false, gotM = false, gotC = false;
   const ms = ts => ts && ts.toMillis ? ts.toMillis() : Date.now();
   function rebuild(){
-    if (!gotV || !gotM) return;
+    if (!gotV || !gotM || !gotC) return;
     const vids = [];
     for (const [id, d] of videosMap) vids.push({ id, title:d.title||'', channel:d.channel||'', tags:d.tags||[], updatedAt:ms(d.updatedAt), marks:[] });
     const byId = new Map(vids.map(v => [v.id, v]));
-    for (const [id, m] of marksMap) { const v = byId.get(m.videoId); if (v) v.marks.push({ id, t:m.t, note:m.note||'', author:m.author||'', uid:m.uid||'' }); }
+    const markById = new Map();
+    for (const [id, m] of marksMap) { const v = byId.get(m.videoId); if (v) { const mk = { id, t:m.t, note:m.note||'', author:m.author||'', uid:m.uid||'', comments:[] }; v.marks.push(mk); markById.set(id, mk); } }
+    for (const [id, c] of commentsMap) { const mk = markById.get(c.markId); if (mk) mk.comments.push({ id, text:c.text||'', author:c.author||'', uid:c.uid||'', createdAt:ms(c.createdAt) }); }
+    for (const mk of markById.values()) mk.comments.sort((a,b) => a.createdAt - b.createdAt);
     db = { videos: vids }; loaded = true; onData();
   }
   const onErr = e => { console.error(e); toast('讀取資料失敗：' + (e.code || e.message)); };
@@ -442,10 +464,12 @@ async function makeCloudStore(){
 
   const V = id => doc(fdb, 'videos', id);
   const M = id => doc(fdb, 'marks', id);
+  const C = id => doc(fdb, 'comments', id);
   return {
     start(){
       onSnapshot(collection(fdb, 'videos'), snap => { snap.docChanges().forEach(c => c.type === 'removed' ? videosMap.delete(c.doc.id) : videosMap.set(c.doc.id, c.doc.data({serverTimestamps:'estimate'}))); gotV = true; rebuild(); }, onErr);
       onSnapshot(collection(fdb, 'marks'),  snap => { snap.docChanges().forEach(c => c.type === 'removed' ? marksMap.delete(c.doc.id) : marksMap.set(c.doc.id, c.doc.data())); gotM = true; rebuild(); }, onErr);
+      onSnapshot(collection(fdb, 'comments'), snap => { snap.docChanges().forEach(c => c.type === 'removed' ? commentsMap.delete(c.doc.id) : commentsMap.set(c.doc.id, c.doc.data({serverTimestamps:'estimate'}))); gotC = true; rebuild(); }, onErr);
     },
     async saveRecord({id, title, channel, tags, marks, author}){
       const b = writeBatch(fdb);
@@ -469,12 +493,23 @@ async function makeCloudStore(){
       await b.commit();
     },
     async updateMark(videoId, markId, patch){ await updateDoc(M(markId), patch); },
-    async deleteMark(videoId, markId){ const b = writeBatch(fdb); b.delete(M(markId)); await b.commit(); },
+    async deleteMark(videoId, markId){
+      const b = writeBatch(fdb);
+      [...commentsMap].filter(([,c]) => c.markId === markId).forEach(([k]) => b.delete(C(k)));
+      b.delete(M(markId)); await b.commit();
+    },
+    async addComment(videoId, markId, text, author){
+      const b = writeBatch(fdb);
+      b.set(doc(collection(fdb, 'comments')), withUid({ videoId, markId, text, author, createdAt:serverTimestamp() }));
+      await b.commit();
+    },
+    async updateComment(videoId, cid, patch){ await updateDoc(C(cid), patch); },
+    async deleteComment(videoId, cid){ const b = writeBatch(fdb); b.delete(C(cid)); await b.commit(); },
     async updateVideo(id, patch){ await updateDoc(V(id), patch); },
     async fillEmpty(id, patch){ const old = videosMap.get(id); if (!old) return; const p = {}; for (const k in patch) if (!old[k] && patch[k]) p[k] = patch[k]; if (Object.keys(p).length) await updateDoc(V(id), p); },
     async deleteVideo(id){
-      const ids = [...marksMap].filter(([,m]) => m.videoId === id).map(([k]) => k);
-      for (let i = 0; i < ids.length; i += 450) { const b = writeBatch(fdb); ids.slice(i, i+450).forEach(k => b.delete(M(k))); await b.commit(); }
+      const refs = [...[...commentsMap].filter(([,c]) => c.videoId === id).map(([k]) => C(k)), ...[...marksMap].filter(([,m]) => m.videoId === id).map(([k]) => M(k))];
+      for (let i = 0; i < refs.length; i += 450) { const b = writeBatch(fdb); refs.slice(i, i+450).forEach(r => b.delete(r)); await b.commit(); }
       const b = writeBatch(fdb); b.delete(V(id)); await b.commit();
     },
     async importData(d){
@@ -486,7 +521,9 @@ async function makeCloudStore(){
         const existing = [...marksMap.values()].filter(m => m.videoId === nv.id);
         for (const m of nv.marks||[]) {
           if (existing.some(x => x.t === m.t && x.note === m.note)) continue;
-          b.set(doc(collection(fdb, 'marks')), { videoId:nv.id, t:m.t, note:String(m.note||''), author:String(m.author||'匯入').slice(0,40) || '匯入', createdAt:serverTimestamp() }); ops++; n++;
+          const ref = doc(collection(fdb, 'marks'));
+          b.set(ref, { videoId:nv.id, t:m.t, note:String(m.note||''), author:String(m.author||'匯入').slice(0,40) || '匯入', createdAt:serverTimestamp() }); ops++; n++;
+          for (const c of (m.comments||[]).slice(0,200)) { if (!c || !String(c.text||'').trim()) continue; b.set(doc(collection(fdb, 'comments')), { videoId:nv.id, markId:ref.id, text:String(c.text).slice(0,2000), author:String(c.author||'匯入').slice(0,40) || '匯入', createdAt:serverTimestamp() }); ops++; }
           if (ops >= 400) await flush();
         }
         if (ops >= 400) await flush();
@@ -567,7 +604,7 @@ function onData(){
   else if (view === 'search') renderSearch();
   else if (view === 'video') {
     if (!getVideo(currentId)) { if (loaded) { toast('這部影片已被刪除'); show('library'); } return; }
-    renderVideoMeta(); if (!editingId) renderMarks();
+    renderVideoMeta(); renderMarks();
   }
   $('#import-area').hidden = !isAdmin();
 }
@@ -622,7 +659,8 @@ $('#lib-grid').addEventListener('click', e => {
 
 /* ---------- 單一影片 ---------- */
 let editingId = null, confirmId = null;
-function openVideo(id, t){
+function openVideo(id, t, expandMark){
+  if (expandMark) expanded.add(expandMark);
   if (view !== 'video') prevView = view;
   currentId = id; editingId = null; confirmId = null;
   const v = getVideo(id); if (!v) return show('library');
@@ -648,13 +686,42 @@ function renderVideoMeta(force){
   if (!admin) $('#del-confirm').hidden = true;
   $('#del-confirm-text').textContent = `「${v.title || '未命名影片'}」和它的 ${v.marks.length} 個時間點（包含其他人新增的）都會被刪除${CLOUD ? '，所有人都看不到' : ''}，而且無法復原。`;
 }
+const expanded = new Set();
+let editingCommentId = null, confirmCommentId = null;
+function captureDrafts(root){
+  const d = {}; root.querySelectorAll('input[id],textarea[id]').forEach(el => d[el.id] = el.value);
+  const a = document.activeElement;
+  const focus = a && a.id && root.contains(a) ? { id:a.id, s:a.selectionStart, e:a.selectionEnd } : null;
+  return { d, focus };
+}
+function restoreDrafts(root, { d, focus }){
+  for (const id in d) { const el = document.getElementById(id); if (el && root.contains(el)) el.value = d[id]; }
+  if (focus) { const el = document.getElementById(focus.id); if (el) { el.focus({ preventScroll:true }); try { el.setSelectionRange(focus.s, focus.e); } catch(e){} } }
+}
+function renderComment(c, admin){
+  if (c.id === editingCommentId && canEditMark(c)) return `<form class="comment" data-cedit="${c.id}">
+      <textarea id="ce-${c.id}" maxlength="2000" aria-label="修改補充">${esc(c.text)}</textarea>
+      <div class="row" style="gap:6px"><button class="btn sm primary" type="submit">儲存</button><button class="btn sm" type="button" data-ccancel>取消</button></div></form>`;
+  const mine = CLOUD && !!c.uid && c.uid === myUid();
+  const edit = canEditMark(c) ? `<button class="linkbtn" data-cedit-btn="${c.id}">編輯</button>` : '';
+  const del = admin ? (confirmCommentId === c.id ? `<button class="linkbtn danger" data-cdel="${c.id}">確定刪除？</button>` : `<button class="linkbtn" data-caskdel="${c.id}">刪除</button>`) : '';
+  return `<div class="comment"><div class="ctext">${esc(c.text)}</div>
+    <div class="cmeta"><span>— ${esc(c.author)}</span>${mine ? '<span class="mine" style="margin-left:0">你寫的</span>' : ''}${edit}${del}</div></div>`;
+}
 function renderMarks(){
   const v = getVideo(currentId); if (!v) return;
   sortMarks(v);
   const admin = isAdmin();
-  $('#mark-count').textContent = `${v.marks.length} 筆`;
   const ul = $('#mark-list');
+  const drafts = captureDrafts(ul);
+  $('#mark-count').textContent = `${v.marks.length} 筆`;
+  const tg = $('#toggle-all');
+  tg.hidden = !v.marks.length;
+  const allOpen = v.marks.length > 0 && v.marks.every(m => expanded.has(m.id));
+  tg.textContent = allOpen ? '全部收起' : '全部展開';
+  tg.dataset.mode = allOpen ? 'close' : 'open';
   if (!v.marks.length) { ul.innerHTML = `<li class="empty">還沒有時間點。播放影片，按「記下目前時間」開始記錄。</li>`; return; }
+  const name = esc(getName());
   ul.innerHTML = v.marks.map(m => {
     const mine = CLOUD && !!m.uid && m.uid === myUid();
     if (m.id === editingId && canEditMark(m)) return `<li class="mark editing" data-id="${m.id}"><form class="stack" style="gap:8px" data-edit="${m.id}">
@@ -664,28 +731,75 @@ function renderMarks(){
     const editBtn = canEditMark(m) ? `<button class="btn ghost small" data-edit-btn="${m.id}">編輯</button>` : '';
     const delBtn = admin ? (confirmId === m.id ? `<button class="btn ghost danger small" data-del="${m.id}">確定刪除？</button>` : `<button class="btn ghost small" data-askdel="${m.id}">刪除</button>`) : '';
     const acts = (editBtn || delBtn) ? `<div class="acts">${editBtn}${delBtn}</div>` : '<span></span>';
+    const cs = m.comments || [];
+    const open = expanded.has(m.id);
+    const thread = `<div class="thread">
+      <button class="thread-toggle" data-toggle="${m.id}" aria-expanded="${open}">💬 ${cs.length ? cs.length + ' 則補充' : '補充或評論'} ${open ? '▴' : '▾'}</button>
+      ${open ? `<div class="thread-body">
+        ${cs.map(c => renderComment(c, admin)).join('')}
+        <form class="cform" data-cform="${m.id}">
+          <textarea id="cf-text-${m.id}" rows="1" placeholder="補充說明或評論…" maxlength="2000" aria-label="補充內容"></textarea>
+          <div class="row"><input type="text" id="cf-name-${m.id}" placeholder="你的名字" maxlength="40" value="${name}" aria-label="你的名字"><button class="btn sm primary" type="submit">送出</button></div>
+        </form></div>` : ''}
+    </div>`;
     return `<li class="mark" data-id="${m.id}">
       <a class="tc-chip" href="${watchUrl(v.id, m.t)}" target="_blank" rel="noopener" data-seek="${m.t}">${fmt(m.t)}</a>
       <div class="note">${esc(m.note) || '<span class="muted">（無備註）</span>'}${(m.author || mine) ? `<span class="by">${m.author ? '— ' + esc(m.author) : ''}${mine ? '<span class="mine">你新增的</span>' : ''}</span>` : ''}</div>
-      ${acts}</li>`;
+      ${acts}${thread}</li>`;
   }).join('');
+  restoreDrafts(ul, drafts);
   lastActive = undefined; highlightActive(true);
 }
+$('#toggle-all').onclick = () => {
+  const v = getVideo(currentId); if (!v) return;
+  if ($('#toggle-all').dataset.mode === 'open') v.marks.forEach(m => expanded.add(m.id));
+  else v.marks.forEach(m => expanded.delete(m.id));
+  renderMarks();
+};
 $('#mark-list').addEventListener('click', async e => {
   const s = e.target.closest('[data-seek]');
   if (s && playerReady) { e.preventDefault(); seek(+s.dataset.seek); return; }
+  const tgl = e.target.closest('[data-toggle]');
+  if (tgl) { const id = tgl.dataset.toggle; expanded.has(id) ? expanded.delete(id) : expanded.add(id); renderMarks();
+    if (expanded.has(id)) { const ta = document.getElementById('cf-text-' + id); if (ta && !(getVideo(currentId).marks.find(m => m.id === id).comments || []).length) ta.focus(); }
+    return; }
   const ed = e.target.closest('[data-edit-btn]'); if (ed) { editingId = ed.dataset.editBtn; confirmId = null; renderMarks(); const ta = document.getElementById('edit-n-'+editingId); ta && ta.focus(); return; }
   if (e.target.closest('[data-cancel]')) { editingId = null; renderMarks(); return; }
   const ask = e.target.closest('[data-askdel]'); if (ask) { confirmId = ask.dataset.askdel; renderMarks(); return; }
-  const del = e.target.closest('[data-del]'); if (del) { confirmId = null; await run(() => store.deleteMark(currentId, del.dataset.del), '已刪除'); }
+  const del = e.target.closest('[data-del]'); if (del) { confirmId = null; expanded.delete(del.dataset.del); await run(() => store.deleteMark(currentId, del.dataset.del), '已刪除'); return; }
+  const ced = e.target.closest('[data-cedit-btn]'); if (ced) { editingCommentId = ced.dataset.ceditBtn; confirmCommentId = null; renderMarks(); const ta = document.getElementById('ce-'+editingCommentId); ta && ta.focus(); return; }
+  if (e.target.closest('[data-ccancel]')) { editingCommentId = null; renderMarks(); return; }
+  const cask = e.target.closest('[data-caskdel]'); if (cask) { confirmCommentId = cask.dataset.caskdel; renderMarks(); return; }
+  const cdel = e.target.closest('[data-cdel]'); if (cdel) { confirmCommentId = null; await run(() => store.deleteComment(currentId, cdel.dataset.cdel), '已刪除補充'); }
 });
 $('#mark-list').addEventListener('submit', async e => {
-  e.preventDefault(); const id = e.target.dataset.edit;
-  const t = parseTime(document.getElementById('edit-t-'+id).value);
-  if (t === null) { toast('時間格式看不懂，例：1:23'); return; }
-  const note = document.getElementById('edit-n-'+id).value.trim().slice(0,2000);
-  editingId = null;
-  if (await run(() => store.updateMark(currentId, id, { t, note }), '已更新')) renderMarks();
+  e.preventDefault(); const f = e.target;
+  if (f.dataset.edit) {
+    const id = f.dataset.edit;
+    const t = parseTime(document.getElementById('edit-t-'+id).value);
+    if (t === null) { toast('時間格式看不懂，例：1:23'); return; }
+    const note = document.getElementById('edit-n-'+id).value.trim().slice(0,2000);
+    editingId = null;
+    if (await run(() => store.updateMark(currentId, id, { t, note }), '已更新')) renderMarks();
+    return;
+  }
+  if (f.dataset.cform) {
+    const mid = f.dataset.cform;
+    const text = document.getElementById('cf-text-'+mid).value.trim().slice(0,2000);
+    const name = document.getElementById('cf-name-'+mid).value.trim().slice(0,40);
+    if (!text) { toast('請輸入補充內容'); return; }
+    if (!name) { toast('請填上你的名字'); document.getElementById('cf-name-'+mid).focus(); return; }
+    setName(name);
+    if (await run(() => store.addComment(currentId, mid, text, name), '已送出')) { const ta = document.getElementById('cf-text-'+mid); if (ta) ta.value = ''; }
+    return;
+  }
+  if (f.dataset.cedit) {
+    const cid = f.dataset.cedit;
+    const text = document.getElementById('ce-'+cid).value.trim().slice(0,2000);
+    if (!text) { toast('內容不能是空的'); return; }
+    editingCommentId = null;
+    if (await run(() => store.updateComment(currentId, cid, { text }), '已更新')) renderMarks();
+  }
 });
 $('#title-input').addEventListener('change', e => { if (isAdmin()) run(() => store.updateVideo(currentId, { title: e.target.value.trim().slice(0,200) }), '已更新標題'); });
 $('#channel-input').addEventListener('change', e => { if (isAdmin()) run(() => store.updateVideo(currentId, { channel: e.target.value.trim().slice(0,100) }), '已更新頻道'); });
@@ -792,14 +906,22 @@ function renderSearch(){
   const q = $('#search-input').value.trim().toLowerCase();
   const terms = q.split(/\s+/).filter(Boolean);
   const out = $('#search-results'), sum = $('#search-summary');
-  if (!terms.length) { sum.textContent = '輸入關鍵字會同時比對備註、影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。'; out.innerHTML = ''; return; }
+  if (!terms.length) { sum.textContent = '輸入關鍵字會同時比對備註、補充評論、影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。'; out.innerHTML = ''; return; }
   const groups = [];
   for (const v of db.videos) {
     sortMarks(v);
     const vtext = [v.title, v.channel, ...(v.tags||[]).map(t => '#'+t)].join(' ').toLowerCase();
     const videoHit = terms.every(t => vtext.includes(t));
-    const markHits = v.marks.filter(m => { const mt = ((m.note||'') + ' ' + (m.author||'')).toLowerCase(); return terms.some(t => mt.includes(t)) && terms.every(t => (mt + ' ' + vtext).includes(t)); });
-    const list = markHits.length ? markHits : (videoHit ? v.marks : []);
+    const markHits = [];
+    for (const m of v.marks) {
+      const cs = m.comments || [];
+      const mt = ((m.note||'') + ' ' + (m.author||'')).toLowerCase();
+      const ct = cs.map(c => ((c.text||'') + ' ' + (c.author||'')).toLowerCase());
+      const all = mt + ' ' + ct.join(' ');
+      if (terms.some(t => all.includes(t)) && terms.every(t => (all + ' ' + vtext).includes(t)))
+        markHits.push({ m, cHits: cs.filter((c,i) => terms.some(t => ct[i].includes(t))) });
+    }
+    const list = markHits.length ? markHits : (videoHit ? v.marks.map(m => ({ m, cHits:[] })) : []);
     if (list.length || videoHit) groups.push({v, list});
   }
   const n = groups.reduce((a,g) => a + g.list.length, 0);
@@ -807,10 +929,10 @@ function renderSearch(){
   out.innerHTML = groups.map(({v, list}) => `<div class="result">
       <div class="result-head"><button data-open="${v.id}">${hl(v.title || '未命名影片', terms)}</button><span class="muted small">共 ${v.marks.length} 個時間點</span></div>
       ${(v.channel||(v.tags||[]).length)?`<div class="row small" style="gap:8px">${v.channel?`<span class="channel">${hl(v.channel,terms)}</span>`:''}${(v.tags||[]).map(t=>`<span class="tag">${hl('#'+t,terms)}</span>`).join('')}</div>`:''}
-      ${list.map(m => `<button class="hit" data-open="${v.id}" data-t="${m.t}"><span class="tc-chip">${fmt(m.t)}</span><span class="note">${hl(m.note, terms)}${m.author?` <span class="muted small">— ${hl(m.author, terms)}</span>`:''}</span></button>`).join('')}
+      ${list.map(({m, cHits}) => `<button class="hit" data-open="${v.id}" data-t="${m.t}"${cHits.length ? ` data-mark="${m.id}"` : ''}><span class="tc-chip">${fmt(m.t)}</span><span class="note">${hl(m.note, terms)}${m.author?` <span class="muted small">— ${hl(m.author, terms)}</span>`:''}${cHits.map(c => `<span class="hit-c">💬 ${hl(c.text, terms)} <span class="small">— ${hl(c.author, terms)}</span></span>`).join('')}${(m.comments||[]).length && !cHits.length ? `<span class="hit-c">💬 ${m.comments.length} 則補充</span>` : ''}</span></button>`).join('')}
     </div>`).join('');
 }
-$('#search-results').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openVideo(b.dataset.open, b.dataset.t != null ? +b.dataset.t : undefined); });
+$('#search-results').addEventListener('click', e => { const b = e.target.closest('[data-open]'); if (b) openVideo(b.dataset.open, b.dataset.t != null ? +b.dataset.t : undefined, b.dataset.mark); });
 
 /* ---------- 新增 ---------- */
 let rowN = 0;
@@ -912,7 +1034,7 @@ $('#add-form').addEventListener('submit', async e => {
 
 /* ---------- 備份 ---------- */
 $('#export-btn').onclick = () => {
-  const out = { videos: db.videos.map(v => ({ id:v.id, title:v.title, channel:v.channel, tags:v.tags, marks: v.marks.map(m => ({ t:m.t, note:m.note, author:m.author })) })) };
+  const out = { videos: db.videos.map(v => ({ id:v.id, title:v.title, channel:v.channel, tags:v.tags, marks: v.marks.map(m => ({ t:m.t, note:m.note, author:m.author, comments:(m.comments||[]).map(c => ({ text:c.text, author:c.author })) })) })) };
   const b = $('#export-box'); b.value = JSON.stringify(out, null, 1); b.hidden = false; $('#copy-btn').hidden = false; b.select();
 };
 $('#copy-btn').onclick = () => { const b = $('#export-box'); const p = navigator.clipboard && navigator.clipboard.writeText(b.value); if (p) p.then(() => toast('已複製'), () => { b.select(); toast('請按 Ctrl/⌘+C 複製'); }); else { b.select(); toast('請按 Ctrl/⌘+C 複製'); } };
