@@ -156,6 +156,9 @@ mark{background:var(--hl);color:inherit;border-radius:3px;padding:0 1px}
 @media (max-width:520px){.entry{grid-template-columns:96px minmax(0,1fr) auto}.tcin{width:96px!important}}
 .entry textarea{min-height:42px}
 .add-cols{display:grid;grid-template-columns:minmax(0,1fr);gap:24px}
+.panel input[readonly]{background:var(--surface-2);border-color:var(--line);padding-left:12px;color:var(--fg);cursor:default}
+.panel input[readonly]:focus{box-shadow:none;border-color:var(--line)}
+.lock{font-size:12px;color:var(--muted);font-weight:400}
 details.panel summary{cursor:pointer;font-weight:700}
 
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--bg);padding:10px 18px;border-radius:999px;font-weight:500;z-index:50;max-width:calc(100% - 32px);text-align:center}
@@ -260,13 +263,13 @@ details.panel summary{cursor:pointer;font-weight:700}
           <div class="hint" id="url-hint"></div>
         </div>
         <div class="field">
-          <label for="add-title">影片標題 <span class="muted small">（選填，播放時會自動抓取）</span></label>
-          <input type="text" id="add-title" placeholder="例：2025 演唱會全場" maxlength="200">
+          <label for="add-title">影片標題 <span class="lock" id="title-lock">🔒 貼上網址後自動帶入</span></label>
+          <input type="text" id="add-title" placeholder="貼上網址後自動帶入" maxlength="200" readonly>
         </div>
         <div class="two">
           <div class="field">
-            <label for="add-channel">頻道名稱 <span class="muted small">（選填）</span></label>
-            <input type="text" id="add-channel" placeholder="例：五月天 Mayday" maxlength="100">
+            <label for="add-channel">頻道名稱 <span class="lock" id="channel-lock">🔒 自動帶入</span></label>
+            <input type="text" id="add-channel" placeholder="貼上網址後自動帶入" maxlength="100" readonly>
           </div>
           <div class="field">
             <label for="add-tags">Hashtag <span class="muted small">（選填）</span></label>
@@ -515,6 +518,8 @@ const watchUrl = (id,t) => `https://www.youtube.com/watch?v=${id}` + (t ? `&t=${
 
 /* ---------- 名字 ---------- */
 function getName(){ return (lsGet(NAME_KEY) || '').trim(); }
+$('#add-author').addEventListener('change', e => { const n = e.target.value.trim(); if (n) setName(n); });
+$('#quick-name').addEventListener('change', e => { const n = e.target.value.trim(); if (n) setName(n); });
 function setName(n){ n = n.trim().slice(0,40); if (n) lsSet(NAME_KEY, n); $('#add-author').value = n; $('#quick-name').value = n; }
 
 /* ---------- 登入區、模式提示 ---------- */
@@ -796,18 +801,63 @@ function addEntryRow(){
 }
 $('#add-entry').onclick = () => addEntryRow().querySelector('input').focus();
 $('#entries').addEventListener('click', e => { if (e.target.closest('[data-rm]')) { const r = e.target.closest('.entry'); if ($('#entries').children.length > 1) r.remove(); else { r.querySelector('input').value=''; r.querySelector('textarea').value=''; } } });
-$('#add-url').addEventListener('input', () => {
+/* 自動抓取影片標題與頻道 */
+const metaCache = new Map();
+async function fetchMeta(id){
+  if (metaCache.has(id)) return metaCache.get(id);
+  const url = 'https://www.youtube.com/watch?v=' + id;
+  let meta = null;
+  for (const ep of ['https://noembed.com/embed?url=', 'https://www.youtube.com/oembed?format=json&url=']) {
+    try {
+      const r = await fetch(ep + encodeURIComponent(url));
+      if (r.ok) { const d = await r.json(); if (d && d.title && !d.error) { meta = { title:d.title, channel:d.author_name || '' }; break; } }
+    } catch(e){}
+  }
+  if (!meta) meta = await metaFromPlayer(id);
+  if (meta) metaCache.set(id, meta);
+  return meta;
+}
+function metaFromPlayer(id){
+  return new Promise(res => {
+    if (ytState !== 'ready') return res(null);
+    const wrap = document.createElement('div'); wrap.style.cssText = 'position:absolute;left:-9999px;top:0;width:200px;height:120px;overflow:hidden';
+    const host = document.createElement('div'); wrap.appendChild(host); document.body.appendChild(wrap);
+    let done = false, p;
+    const finish = v => { if (done) return; done = true; try { p && p.destroy(); } catch(e){} wrap.remove(); res(v); };
+    const read = t => { try { const d = t.getVideoData(); if (d && d.title) finish({ title:d.title, channel:d.author || '' }); } catch(e){} };
+    p = new YT.Player(host, { videoId:id, playerVars:{ mute:1, autoplay:1, playsinline:1 }, events:{
+      onReady: e => { e.target.mute(); read(e.target); if (!done) e.target.playVideo(); },
+      onStateChange: e => read(e.target),
+      onError: () => finish(null) } });
+    setTimeout(() => finish(null), 10000);
+  });
+}
+function setMetaFields(title, channel, locked, ph){
+  for (const [sel, val, lockSel] of [['#add-title', title, '#title-lock'], ['#add-channel', channel, '#channel-lock']]) {
+    const el = $(sel); el.value = val || ''; el.readOnly = locked; el.placeholder = ph;
+    $(lockSel).textContent = locked ? '🔒 自動帶入' : '（抓不到，請手動輸入）';
+  }
+}
+let metaToken = 0, metaPending = null, urlTimer;
+$('#add-url').addEventListener('input', () => { clearTimeout(urlTimer); urlTimer = setTimeout(onUrlChange, 250); });
+function onUrlChange(){
   const val = $('#add-url').value, id = parseVideoId(val), h = $('#url-hint');
-  if (!val.trim()) { resetUrlHint(); return; }
-  if (!id) { h.className = 'hint err'; h.textContent = '看不出這是哪支 YouTube 影片，請確認網址。'; return; }
+  const token = ++metaToken;
+  if (!val.trim()) { resetUrlHint(); setMetaFields('', '', true, '貼上網址後自動帶入'); metaPending = null; return; }
+  if (!id) { h.className = 'hint err'; h.textContent = '看不出這是哪支 YouTube 影片，請確認網址。'; setMetaFields('', '', true, '貼上網址後自動帶入'); metaPending = null; return; }
   const v = getVideo(id);
-  h.className = 'hint ok'; h.textContent = v ? `已有這部影片「${v.title || id}」（${v.marks.length} 筆），新的時間點會加進去。` : `影片 ID：${id}`;
-  $('#add-title').placeholder = v && v.title ? v.title : '例：2025 演唱會全場';
-  $('#add-channel').placeholder = v && v.channel ? v.channel : '例：五月天 Mayday';
+  h.className = 'hint ok'; h.textContent = v ? `已有這部影片（${v.marks.length} 筆），新的時間點會加進去。` : `影片 ID：${id}`;
   $('#add-tags').placeholder = v && v.tags && v.tags.length ? tagStr(v.tags) + '（可再加）' : '#演唱會 #現場';
   const t = parseUrlTime(val); const first = $('#entries .entry .tcin');
   if (t != null && first && !first.value) first.value = fmt(t);
-});
+  if (v && v.title && v.channel) { setMetaFields(v.title, v.channel, true, ''); metaPending = null; return; }
+  setMetaFields(v ? v.title : '', v ? v.channel : '', true, '抓取中…');
+  metaPending = fetchMeta(id).then(meta => {
+    if (token !== metaToken) return;
+    if (meta) setMetaFields((v && v.title) || meta.title, (v && v.channel) || meta.channel, true, '');
+    else setMetaFields(v ? v.title : '', v ? v.channel : '', false, '抓不到影片資訊，請手動輸入');
+  });
+}
 $('#add-form').addEventListener('submit', async e => {
   e.preventDefault(); const err = $('#form-err'); err.textContent = '';
   const author = $('#add-author').value.trim().slice(0,40);
@@ -822,12 +872,14 @@ $('#add-form').addEventListener('submit', async e => {
   }
   if (!marks.length) { err.textContent = '至少填一筆時間點。'; return; }
   const btn = $('#add-submit'); btn.disabled = true; btn.textContent = '儲存中…';
+  if (metaPending) { try { await metaPending; } catch(e){} }
   const ok = await run(() => store.saveRecord({ id, author, marks,
     title: $('#add-title').value.trim().slice(0,200), channel: $('#add-channel').value.trim().slice(0,100), tags: parseTags($('#add-tags').value) }), `已儲存 ${marks.length} 筆`);
   btn.disabled = false; btn.textContent = '儲存紀錄';
   if (!ok) return;
   setName(author);
-  for (const s of ['#add-url','#add-title','#add-channel','#add-tags']) $(s).value = '';
+  for (const s of ['#add-url','#add-tags']) $(s).value = '';
+  setMetaFields('', '', true, '貼上網址後自動帶入'); metaPending = null;
   $('#entries').innerHTML = ''; resetUrlHint();
   prevView = 'add';
   const go = () => getVideo(id) ? openVideo(id) : setTimeout(go, 150);
