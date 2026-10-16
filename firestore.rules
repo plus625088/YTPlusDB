@@ -72,16 +72,26 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ---------- 自動標籤規則：settings/autoTags ----------
+    // ---------- 網站設定：settings/autoTags（自動標籤規則）、settings/site（功能開關） ----------
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin()
-        && settingId == 'autoTags'
-        && data().keys().hasOnly(['rules', 'pending', 'updatedAt'])
-        && data().rules is list && data().rules.size() <= 50
-        && data().pending is map
-        && nonEmptyStr(data().pending.tag, 40)
-        && data().pending.enabled is bool;
+      allow write: if isAdmin() && (
+        (settingId == 'autoTags'
+          && data().keys().hasOnly(['rules', 'pending', 'updatedAt'])
+          && data().rules is list && data().rules.size() <= 50
+          && data().pending is map
+          && nonEmptyStr(data().pending.tag, 40)
+          && data().pending.enabled is bool)
+        || (settingId == 'site'
+          && data().keys().hasOnly(['commentsEnabled', 'updatedAt'])
+          && data().commentsEnabled is bool)
+      );
+    }
+
+    // 後台是否開放時間點的補充／評論（沒有設定時視為開放）
+    function commentsOpen() {
+      let path = /databases/$(database)/documents/settings/site;
+      return !exists(path) || get(path).data.commentsEnabled != false;
     }
 
     // ---------- 時間點：marks/{自動ID} ----------
@@ -114,7 +124,9 @@ service cloud.firestore {
     match /comments/{commentId} {
       allow read: if true;
 
+      // 後台關閉補充／評論時，只有管理者能新增
       allow create: if signedIn()
+        && (commentsOpen() || isAdmin())
         && isAutoId(commentId)
         && data().keys().hasOnly(['videoId', 'markId', 'text', 'author', 'createdAt', 'uid'])
         && data().uid == request.auth.uid

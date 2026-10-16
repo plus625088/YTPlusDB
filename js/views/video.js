@@ -4,7 +4,7 @@
 import { CLOUD, LIMITS } from "../config.js";
 import { tagClass, sortTags } from "../core/autotag.js";
 import { $, esc, toast, run, captureDrafts, restoreDrafts } from "../core/dom.js";
-import { state, getVideo, sortMarks, isAdmin, isMine, canEdit, getName, setName } from "../core/state.js";
+import { state, getVideo, sortMarks, isAdmin, isMine, canEdit, getName, setName, commentsEnabled } from "../core/state.js";
 import { parseTime, formatTime, formatDate, parseTags, watchUrl, hasTime } from "../core/format.js";
 import { registerView, show, nav } from "../core/router.js";
 import {
@@ -210,6 +210,7 @@ function renderComment(c) {
 }
 
 function renderThread(m) {
+  if (!commentsEnabled()) return ""; // 後台關閉補充／評論時不顯示
   const id = esc(m.id);
   const comments = m.comments || [];
   const open = expanded.has(m.id);
@@ -271,7 +272,7 @@ function renderMarks() {
   $("#mark-count").textContent = `${v.marks.length} 筆`;
   const toggleAll = $("#toggle-all");
   const allOpen = v.marks.length > 0 && v.marks.every((m) => expanded.has(m.id));
-  toggleAll.hidden = !v.marks.length;
+  toggleAll.hidden = !v.marks.length || !commentsEnabled();
   toggleAll.textContent = allOpen ? "全部收起" : "全部展開";
   toggleAll.dataset.mode = allOpen ? "close" : "open";
 

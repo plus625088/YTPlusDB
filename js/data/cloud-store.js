@@ -15,7 +15,7 @@
  */
 import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, LIMITS } from "../config.js";
 import { toast } from "../core/dom.js";
-import { state, emitChange, isAdmin } from "../core/state.js";
+import { state, emitChange, isAdmin, normalizeSite } from "../core/state.js";
 import { isVideoId, hasTime, sameTags } from "../core/format.js";
 import { withPendingTag, withRuleTags, tagsFromRules, pendingTag, normalizeSettings, DEFAULT_SETTINGS } from "../core/autotag.js";
 
@@ -170,6 +170,11 @@ export async function createCloudStore() {
         state.settings = normalizeSettings(snap.exists() ? snap.data() : DEFAULT_SETTINGS);
         emitChange();
       }, (e) => console.warn("讀取自動標籤規則失敗", e));
+      // 網站功能開關（文件不存在時全部開啟）
+      onSnapshot(doc(db, "settings", "site"), (snap) => {
+        state.site = normalizeSite(snap.exists() ? snap.data() : null);
+        emitChange();
+      }, (e) => console.warn("讀取網站設定失敗", e));
       listen("videos");
       listen("marks");
       listen("comments");
@@ -227,6 +232,13 @@ export async function createCloudStore() {
       const entries = Object.entries(changes).filter(([id]) => raw.videos.has(id));
       await commitInChunks(entries.map(([id, tags]) => (b) => b.update(videoRef(id), { tags: tags.slice(0, LIMITS.tags) })));
       return entries.length;
+    },
+
+    /* ----- 網站功能開關（只有管理者能修改） ----- */
+
+    async saveSite(patch) {
+      const next = normalizeSite({ ...state.site, ...patch });
+      await setDoc(doc(db, "settings", "site"), { ...next, updatedAt: serverTimestamp() });
     },
 
     /* ----- 自動標籤規則（只有管理者能修改） ----- */

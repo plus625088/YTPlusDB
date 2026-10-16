@@ -70,7 +70,7 @@ function updateMemberHint() {
   if (existing) {
     hint.textContent = "這部影片已經在網站上，不會再自動加標籤。";
   } else if (!$("#add-title").value.trim()) {
-    hint.textContent = "會依「標籤規則」自動加上 Hashtag。";
+    hint.textContent = "會依「設定」頁的規則自動加上 Hashtag。";
   } else {
     hint.textContent = tags.length ? `會自動加上 ${tags.map((t) => "#" + t).join(" ")}。` : "沒有符合的自動標籤規則。";
   }

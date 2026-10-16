@@ -95,7 +95,7 @@ function renderTagManage(names, counts) {
     names.map((t, i) => {
       const system = isAutoTag(t);
       const action = system
-        ? `<span class="small muted">自動標籤，請到「標籤規則」修改</span>`
+        ? `<span class="small muted">自動標籤，請到「設定」頁修改</span>`
         : `<button type="button" class="btn sm${confirmMerge === t ? " danger-outline" : ""}" data-rename="${esc(t)}">${confirmMerge === t ? "確定合併？" : "改名"}</button>`;
       return `<div class="tag-manage-row">
         <span class="tm-name"><span class="${tagClass(t)}">#${esc(t)}</span> <span class="small muted">${counts[t]} 部</span></span>

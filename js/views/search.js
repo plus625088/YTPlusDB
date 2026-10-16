@@ -2,7 +2,7 @@
  * 「搜尋」分頁：同時比對說明、補充評論、標題、頻道、Hashtag、建立者。
  */
 import { $, esc } from "../core/dom.js";
-import { state, sortMarks } from "../core/state.js";
+import { state, sortMarks, commentsEnabled } from "../core/state.js";
 import { formatTime, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
 import { tagClass, sortTags } from "../core/autotag.js";
@@ -30,7 +30,7 @@ function search(terms) {
 
     const hits = [];
     for (const m of v.marks) {
-      const comments = m.comments || [];
+      const comments = commentsEnabled() ? m.comments || [] : []; // 關閉補充／評論時不搜尋補充
       const markText = `${m.note || ""} ${m.author || ""}`.toLowerCase();
       const commentTexts = comments.map((c) => `${c.text || ""} ${c.author || ""}`.toLowerCase());
       const allText = markText + " " + commentTexts.join(" ");
@@ -50,7 +50,7 @@ function renderHit(v, { mark: m, matchedComments }, terms) {
   const commentLines = matchedComments
     .map((c) => `<span class="hit-c">💬 ${highlight(c.text, terms)} <span class="small">— ${highlight(c.author, terms)}</span></span>`)
     .join("");
-  const commentCount = (m.comments || []).length && !matchedComments.length
+  const commentCount = commentsEnabled() && (m.comments || []).length && !matchedComments.length
     ? `<span class="hit-c">💬 ${m.comments.length} 則補充</span>` : "";
   const timeAttr = hasTime(m.t) ? ` data-t="${m.t}"` : "";
   const chip = hasTime(m.t) ? `<span class="tc-chip">${formatTime(m.t)}</span>` : '<span class="tc-chip no-time">整部</span>';
@@ -67,7 +67,7 @@ function render() {
   const summary = $("#search-summary");
 
   if (!terms.length) {
-    summary.textContent = "輸入關鍵字會同時比對說明、補充評論、影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。";
+    summary.textContent = `輸入關鍵字會同時比對說明、${commentsEnabled() ? "補充評論、" : ""}影片標題、頻道、Hashtag 和建立者；多個關鍵字用空白分開。`;
     out.innerHTML = "";
     return;
   }

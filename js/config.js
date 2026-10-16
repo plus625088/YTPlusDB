@@ -35,7 +35,7 @@ export const FIREBASE_SDK_VERSION = "10.12.2";
 export const CLOUD = Boolean(FIREBASE_CONFIG.projectId);
 
 /**
- * 自動標籤（會員、公開、待補…）的規則改在網站的「標籤規則」頁設定，存在資料庫裡。
+ * 自動標籤（會員、公開、待補…）的規則改在網站的「設定」頁設定，存在資料庫裡。
  * 預設規則見 js/core/autotag.js 的 DEFAULT_SETTINGS。
  */
 

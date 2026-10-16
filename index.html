@@ -28,7 +28,7 @@
         <button data-nav="search" id="nav-search">搜尋</button>
         <button data-nav="add" id="nav-add">新增</button>
         <button data-nav="import" id="nav-import" hidden>批次匯入</button>
-        <button data-nav="rules" id="nav-rules" hidden>標籤規則</button>
+        <button data-nav="rules" id="nav-rules" hidden>設定</button>
       </nav>
       <div class="auth" id="auth-area" hidden></div>
     </div>
@@ -173,7 +173,7 @@
         <div class="field">
           <label for="add-title">影片標題 <span class="lock" id="title-lock">🔒 貼上網址後自動帶入</span></label>
           <input type="text" id="add-title" placeholder="貼上網址後自動帶入" maxlength="200" readonly>
-          <div class="hint" id="member-hint">會依「標籤規則」自動加上 Hashtag。</div>
+          <div class="hint" id="member-hint">會依「設定」頁的規則自動加上 Hashtag。</div>
         </div>
         <div class="two">
           <div class="field">
@@ -261,7 +261,19 @@
 
   <!-- 自動標籤規則（管理者） -->
   <section id="view-rules" hidden>
-    <div class="row" style="gap:10px;margin-bottom:6px"><h1>自動標籤規則</h1><span class="admin-badge">管理者</span></div>
+    <div class="row" style="gap:10px;margin-bottom:16px"><h1>後台設定</h1><span class="admin-badge">管理者</span></div>
+
+    <div class="panel rules-panel site-panel">
+      <h2>功能開關</h2>
+      <label class="switch-row" for="site-comments">
+        <input type="checkbox" id="site-comments" role="switch">
+        <span><strong>開放時間點的補充／評論</strong><br>
+          <span class="hint">關閉後，影片頁不再顯示補充區與「全部展開」按鈕，搜尋也不會比對補充內容，其他人也無法再新增補充。已經留下的補充不會刪除，重新開啟就會再出現。</span></span>
+      </label>
+      <span class="hint" id="site-status"></span>
+    </div>
+
+    <h2 class="section-title">自動標籤規則</h2>
     <p class="muted" style="margin:0 0 18px;max-width:70ch">新增影片時（或第一次抓到影片標題時），依下面的規則自動加上 Hashtag。自動加上的標籤會用 <span class="tag auto">#藍色</span> 顯示，和手動加的標籤區分。</p>
 
     <div class="rules-layout">

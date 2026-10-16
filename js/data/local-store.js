@@ -3,13 +3,14 @@
  * 提供的函式和 cloud-store.js 完全相同，畫面不需要知道目前用哪一種。
  */
 import { makeId, storageGet, storageSet } from "../core/dom.js";
-import { state, emitChange } from "../core/state.js";
+import { state, emitChange, normalizeSite } from "../core/state.js";
 import { isVideoId } from "../core/format.js";
 import { withPendingTag, withRuleTags, normalizeSettings, DEFAULT_SETTINGS } from "../core/autotag.js";
 import { sampleData } from "./seed.js";
 
 const STORAGE_KEY = "yt-timecode-notes.v1";
 const SETTINGS_KEY = "yt-timecode-notes.settings";
+const SITE_KEY = "yt-timecode-notes.site";
 
 function loadSettings() {
   try { return normalizeSettings(JSON.parse(storageGet(SETTINGS_KEY) || "null") || DEFAULT_SETTINGS); }
@@ -55,6 +56,7 @@ export function createLocalStore() {
   return {
     start() {
       state.settings = loadSettings();
+      try { state.site = normalizeSite(JSON.parse(storageGet(SITE_KEY) || "null")); } catch { /* 用預設值 */ }
       state.db = data;
       state.loaded = true;
       emitChange();
@@ -105,6 +107,14 @@ export function createLocalStore() {
       }
       save();
       return Object.keys(changes).length;
+    },
+
+    /* ----- 網站功能開關 ----- */
+
+    async saveSite(patch) {
+      state.site = normalizeSite({ ...state.site, ...patch });
+      storageSet(SITE_KEY, JSON.stringify(state.site));
+      emitChange();
     },
 
     /* ----- 自動標籤規則 ----- */

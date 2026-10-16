@@ -1,7 +1,7 @@
 /**
  * 自動標籤規則。
  *
- * 規則存在資料庫（settings/autoTags），管理者可以在「標籤規則」頁修改：
+ * 規則存在資料庫（settings/autoTags），管理者可以在「設定」頁修改：
  *   rules:   [{ id, field: "title" | "channel", op: "contains" | "notContains", keywords: [..], tag }]
  *            依影片標題或頻道判斷要自動加上哪些 Hashtag。
  *            只在「新增影片」或「第一次抓到標題」時套用；也可以在設定頁手動套用到現有影片。
@@ -93,7 +93,7 @@ export function withPendingTag(tags, hasMarks) {
 const byStroke = new Intl.Collator("zh-Hant-TW-u-co-stroke").compare;
 
 /**
- * 標籤排序：自動標籤排在最前面（依「標籤規則」頁的規則順序，「待補」排在規則標籤之後），
+ * 標籤排序：自動標籤排在最前面（依「設定」頁的規則順序，「待補」排在規則標籤之後），
  * 其餘手動加的標籤依筆畫排序。
  */
 export function sortTags(tags) {

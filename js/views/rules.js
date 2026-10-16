@@ -1,11 +1,11 @@
 /**
- * 「標籤規則」分頁（只有管理者）：設定自動加上 Hashtag 的規則。
+ * 「設定」分頁（只有管理者）：網站功能開關、自動加上 Hashtag 的規則。
  *
  * 編輯中的內容放在 draft，按「儲存規則」才寫入資料庫。
  * 如果改了某條規則的標籤名稱（或「待補」的名稱），儲存時會把現有影片上的舊名稱一起改掉。
  */
 import { $, esc, toast, run } from "../core/dom.js";
-import { state, isAdmin } from "../core/state.js";
+import { state, isAdmin, commentsEnabled } from "../core/state.js";
 import { registerView } from "../core/router.js";
 import {
   getSettings, normalizeSettings, tagsFromRules, tagClass, sortTags,
@@ -225,6 +225,24 @@ async function applyExisting(button) {
   }
 }
 
+/* ---------- 功能開關（切換後立即儲存） ---------- */
+
+function renderSite() {
+  const box = $("#site-comments");
+  if (!box.disabled) box.checked = commentsEnabled(); // 儲存中不要蓋掉
+}
+
+async function onCommentsToggle(e) {
+  const box = e.target;
+  const on = box.checked;
+  box.disabled = true;
+  $("#site-status").textContent = "儲存中…";
+  const ok = await run(() => state.store.saveSite({ commentsEnabled: on }), on ? "已開放補充／評論" : "已關閉補充／評論");
+  box.disabled = false;
+  $("#site-status").textContent = "";
+  if (!ok) box.checked = !on;
+}
+
 /* ---------- 初始化 ---------- */
 
 function loadDraft() {
@@ -254,6 +272,7 @@ export function initRules() {
   $("#rules-test-title").addEventListener("input", renderStatus);
   $("#rules-test-channel").addEventListener("input", renderStatus);
   bindDragSort();
+  $("#site-comments").addEventListener("change", onCommentsToggle);
   $("#rules-save").addEventListener("click", save);
   $("#rules-reset").addEventListener("click", loadDraft);
   $("#rules-check").addEventListener("click", checkExisting);
@@ -264,13 +283,13 @@ export function initRules() {
 
   registerView("rules", {
     adminOnly: true,
-    onShow() { if (!draft || !isDirty()) loadDraft(); else renderStatus(); },
+    onShow() { renderSite(); if (!draft || !isDirty()) loadDraft(); else renderStatus(); },
     // 資料更新時：正在編輯就保留草稿，否則載入最新的規則
-    onData() { if (!draft || !isDirty()) loadDraft(); else renderStatus(); },
+    onData() { renderSite(); if (!draft || !isDirty()) loadDraft(); else renderStatus(); },
   });
 }
 
-/** 只有管理者看得到「標籤規則」選單 */
+/** 只有管理者看得到「設定」選單 */
 export function updateRulesVisibility() {
   $("#nav-rules").hidden = !isAdmin();
 }

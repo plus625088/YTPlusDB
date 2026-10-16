@@ -20,7 +20,15 @@ export const state = {
   user: null,      // Firebase 登入者（匿名或 Google）
   store: null,     // 資料層：local-store 或 cloud-store
   settings: null,  // 自動標籤規則（見 core/autotag.js），還沒載入時用預設值
+  site: { commentsEnabled: true }, // 網站功能開關（在「設定」頁修改）
 };
+
+/** 網站功能開關的預設值，以及整理資料庫讀到的內容 */
+export const DEFAULT_SITE = { commentsEnabled: true };
+export const normalizeSite = (raw) => ({ commentsEnabled: raw?.commentsEnabled !== false });
+
+/** 是否開放時間點的補充／評論 */
+export const commentsEnabled = () => state.site?.commentsEnabled !== false;
 
 /* ---------- 變動通知 ---------- */
 

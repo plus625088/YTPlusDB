@@ -3,7 +3,7 @@
  *
  * 檔案結構：
  *   config.js            設定（Firebase、管理者、YouTube API 金鑰）
- *   core/autotag.js      自動標籤規則（規則內容存在資料庫，可在「標籤規則」頁修改）
+ *   core/autotag.js      自動標籤規則（規則內容存在資料庫，可在「設定」頁修改）
  *   core/                共用工具：畫面小工具、格式解析、全站狀態、分頁切換
  *   data/                資料層：local-store（單機）、cloud-store（Firebase）
  *   youtube/             播放器、影片資訊查詢
