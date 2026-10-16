@@ -302,6 +302,7 @@ export async function createCloudStore() {
         if (!old) {
           batch.set(videoRef(nv.id), {
             title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(withMemberTag(nv.tags || [], nv.title), hasMarks), createdBy: "匯入",
+            ...(Number.isInteger(nv.publishedAt) && nv.publishedAt > 0 ? { publishedAt: nv.publishedAt } : {}),
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           });
           count++;

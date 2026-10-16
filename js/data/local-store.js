@@ -154,7 +154,7 @@ export function createLocalStore() {
       for (const nv of videos) {
         let v = findVideo(nv.id);
         if (!v) {
-          v = { id: nv.id, title: "", channel: "", tags: [], marks: [], updatedAt: Date.now() };
+          v = { id: nv.id, title: "", channel: "", tags: [], marks: [], updatedAt: Date.now(), publishedAt: nv.publishedAt || 0 };
           data.videos.push(v);
         }
         v.tags = [...new Set([...(v.tags || []), ...(nv.tags || [])])];

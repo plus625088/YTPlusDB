@@ -189,7 +189,7 @@
   <!-- 批次匯入（管理者） -->
   <section id="view-import" hidden>
     <div class="row" style="gap:10px;margin-bottom:6px"><h1>批次匯入</h1><span class="admin-badge">管理者</span></div>
-    <p class="muted" style="margin:0 0 18px;max-width:70ch">用 Excel 一次匯入多部影片和時間點。上傳後會先列出預覽和檢查結果，確認沒問題再按匯入。</p>
+    <p class="muted" style="margin:0 0 18px;max-width:70ch">用 Excel 或 YouTube 播放清單一次匯入多部影片。讀取後會先列出預覽和檢查結果，確認沒問題再按匯入。</p>
     <div class="imp-steps">
       <div class="panel" style="gap:12px">
         <h2>1. 下載範本</h2>
@@ -209,9 +209,22 @@
         </label>
         <input type="file" id="imp-file" accept=".xlsx,.xls,.csv" hidden>
       </div>
+      <form class="panel" id="pl-form" style="gap:12px">
+        <h2>或：匯入播放清單</h2>
+        <div class="hint">貼上 YouTube 播放清單網址，清單裡的影片會一次加入（沒有時間點，會標記為 #待補）。清單需設為公開或不公開，私人清單讀不到。</div>
+        <div class="field">
+          <label for="pl-url">播放清單網址</label>
+          <input type="text" id="pl-url" placeholder="https://www.youtube.com/playlist?list=…" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="pl-tags">替這些影片加上 Hashtag <span class="muted small">（選填）</span></label>
+          <input type="text" id="pl-tags" placeholder="#2025巡演 #直播">
+        </div>
+        <div class="row"><button class="btn" type="submit" id="pl-load">讀取清單</button><span class="hint" id="pl-hint"></span></div>
+      </form>
     </div>
     <div class="stack" id="imp-result" style="margin-top:24px" hidden>
-      <h2>3. 檢查並匯入</h2>
+      <h2 id="imp-result-title">3. 檢查並匯入</h2>
       <div class="imp-sum" id="imp-sum"></div>
       <div class="tbl-wrap"><table class="prev"><thead><tr><th>列</th><th>影片</th><th>時間</th><th>說明</th><th>建立者</th><th>Hashtag</th><th>狀態</th></tr></thead><tbody id="imp-rows"></tbody></table></div>
       <div class="row">

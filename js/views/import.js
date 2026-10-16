@@ -4,13 +4,15 @@
  * Excel 格式見 template.xlsx：工作表「時間點」，一列一個時間點，欄位
  *   影片網址* | 時間碼 | 說明 | 建立者 | Hashtag | 影片標題 | 頻道名稱
  * 欄位順序不限，會依標題列的文字找欄位。
+ *
+ * 也可以貼上 YouTube 播放清單網址，一次加入清單裡的所有影片（只建立影片，標記為 #待補）。
  */
 import { LIMITS } from "../config.js";
 import { $, esc, toast, run } from "../core/dom.js";
 import { state, getVideo, isAdmin, getName } from "../core/state.js";
 import { parseVideoId, parseTime, formatTime, parseTags, tagsToText, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
-import { fetchVideoMeta } from "../youtube/meta.js";
+import { fetchVideoMeta, parsePlaylistId, fetchPlaylist } from "../youtube/meta.js";
 
 const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 
@@ -63,6 +65,7 @@ function findColumns(rows) {
 async function readFile(file) {
   if (!file) return;
   $("#imp-filename").textContent = file.name;
+  $("#imp-result-title").textContent = `檢查並匯入：${file.name}`;
   $("#imp-result").hidden = false;
   setProgress("讀取中…");
 
@@ -136,6 +139,57 @@ function buildPlan(rows) {
   renderPlan();
 }
 
+/* ---------- 讀取播放清單 ---------- */
+
+function setPlaylistHint(text, kind = "") {
+  const hint = $("#pl-hint");
+  hint.className = "hint" + (kind ? " " + kind : "");
+  hint.textContent = text;
+}
+
+async function loadPlaylist(e) {
+  e.preventDefault();
+  const playlistId = parsePlaylistId($("#pl-url").value);
+  if (!playlistId) { setPlaylistHint("看不出這是哪個播放清單，網址裡要有 list=…", "err"); return; }
+
+  const button = $("#pl-load");
+  button.disabled = true;
+  setPlaylistHint("讀取中…");
+  let result;
+  try {
+    result = await fetchPlaylist(playlistId, { onProgress: (n) => setPlaylistHint(`讀取中… 已找到 ${n} 部`) });
+  } catch (err) {
+    setPlaylistHint(err.message, "err");
+    return;
+  } finally {
+    button.disabled = false;
+  }
+  if (!result.videos.length) { setPlaylistHint("這個清單裡沒有可以加入的影片。", "err"); return; }
+
+  const extraTags = parseTags($("#pl-tags").value);
+  lastRows = null; // 不是 Excel，修改預設建立者時不用重新檢查
+  plan = result.videos.map((v, i) => {
+    const existing = getVideo(v.id);
+    const item = {
+      line: i + 1, url: "", id: v.id, t: null, timeText: "", note: "", author: "",
+      tags: extraTags, title: v.title.slice(0, LIMITS.title), channel: v.channel.slice(0, LIMITS.channel),
+      publishedAt: v.publishedAt, videoOnly: true,
+    };
+    const missingTags = extraTags.filter((t) => !(existing?.tags || []).includes(t));
+    if (!existing) Object.assign(item, { status: "ok", message: "新影片（待補）" });
+    else if (missingTags.length) Object.assign(item, { status: "ok", message: "已存在，加上 Hashtag" });
+    else Object.assign(item, { status: "skip", message: "影片已存在，略過" });
+    return item;
+  });
+
+  setPlaylistHint(`「${result.title}」共 ${result.videos.length} 部影片`, "ok");
+  $("#imp-filename").textContent = "";
+  $("#imp-result-title").textContent = `檢查並匯入：播放清單「${result.title}」`;
+  $("#imp-result").hidden = false;
+  renderPlan();
+  $("#imp-result").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 /* ---------- 顯示預覽 ---------- */
 
 function setProgress(text) {
@@ -158,7 +212,7 @@ function renderPlan() {
   const newVideos = [...videoIds].filter((id) => !getVideo(id));
 
   $("#imp-sum").innerHTML = `
-    <div class="stat"><b>${okMarks.length}</b><span>個時間點會匯入</span></div>
+    ${okMarks.length || !ok.length ? `<div class="stat"><b>${okMarks.length}</b><span>個時間點會匯入</span></div>` : ""}
     <div class="stat"><b>${videoIds.size}</b><span>部影片（新 ${newVideos.length}）</span></div>
     <div class="stat"><b>${skipped.length}</b><span>列略過</span></div>
     <div class="stat${errors.length ? " bad" : ""}"><b>${errors.length}</b><span>列有錯誤</span></div>`;
@@ -169,7 +223,7 @@ function renderPlan() {
     ? plan.map((i) => `<tr class="${i.status === "error" ? "err" : ""}">
         <td class="num">${i.line}</td>
         <td>${videoLabel(i)}</td>
-        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : i.videoOnly ? '<span class="tag pending">#待補</span>' : '<span class="tc-chip no-time">整部</span>'}</td>
+        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : i.videoOnly ? (getVideo(i.id) ? '<span class="muted">—</span>' : '<span class="tag pending">#待補</span>') : '<span class="tc-chip no-time">整部</span>'}</td>
         <td>${esc(i.note)}</td>
         <td>${esc(i.author)}</td>
         <td>${esc(tagsToText(i.tags))}</td>
@@ -194,6 +248,7 @@ function groupByVideo(items) {
     const v = videos.get(i.id);
     v.title ||= i.title;
     v.channel ||= i.channel;
+    v.publishedAt ||= i.publishedAt;
     v.tags = [...new Set([...v.tags, ...i.tags])].slice(0, LIMITS.tags);
     if (!i.videoOnly) v.marks.push({ t: i.t, note: i.note, author: i.author });
   }
@@ -258,6 +313,7 @@ export function initImport() {
 
   $("#imp-author").addEventListener("change", () => { if (lastRows) buildPlan(lastRows); });
   $("#imp-go").addEventListener("click", runImport);
+  $("#pl-form").addEventListener("submit", loadPlaylist);
 
   registerView("import", {
     adminOnly: true,

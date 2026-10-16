@@ -38,6 +38,59 @@ export async function fetchFromDataApi(videoIds) {
   return result;
 }
 
+/** 從網址取出播放清單 ID（list= 參數），也可以直接輸入清單 ID */
+export function parsePlaylistId(input) {
+  const s = String(input || "").trim();
+  if (/^[\w-]{10,64}$/.test(s) && !/^[\w-]{11}$/.test(s)) return s;
+  try {
+    const url = new URL(/^https?:\/\//i.test(s) ? s : "https://" + s);
+    const id = url.searchParams.get("list");
+    return id && /^[\w-]{10,64}$/.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 讀取播放清單：回傳 { title, videos: [{ id, title, channel, publishedAt }] }。
+ * 已刪除或私人的影片會略過。最多讀 maxItems 部。
+ */
+export async function fetchPlaylist(playlistId, { maxItems = 2000, onProgress } = {}) {
+  if (!YT_API_KEY) throw new Error("沒有設定 YouTube API 金鑰，無法讀取播放清單");
+  const key = encodeURIComponent(YT_API_KEY);
+  const list = encodeURIComponent(playlistId);
+
+  const info = await fetch(`https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${list}&key=${key}`);
+  if (!info.ok) throw new Error(`讀取清單失敗（${info.status}）`);
+  const infoData = await info.json();
+  const title = infoData.items?.[0]?.snippet?.title;
+  if (!title) throw new Error("找不到這個播放清單，請確認網址，或清單是否設為私人");
+
+  const videos = [];
+  let pageToken = "";
+  do {
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&maxResults=50&playlistId=${list}&key=${key}` + (pageToken ? `&pageToken=${pageToken}` : ""));
+    if (!res.ok) throw new Error(`讀取清單影片失敗（${res.status}）`);
+    const data = await res.json();
+    for (const item of data.items || []) {
+      const id = item.contentDetails?.videoId;
+      const sn = item.snippet || {};
+      if (!id || !sn.videoOwnerChannelTitle) continue; // 已刪除或私人影片沒有頻道名稱
+      if (videos.some((v) => v.id === id)) continue;
+      videos.push({
+        id,
+        title: sn.title || "",
+        channel: sn.videoOwnerChannelTitle || "",
+        publishedAt: Date.parse(item.contentDetails?.videoPublishedAt) || 0,
+      });
+    }
+    onProgress?.(videos.length);
+    pageToken = data.nextPageToken || "";
+  } while (pageToken && videos.length < maxItems);
+
+  return { title, videos: videos.slice(0, maxItems) };
+}
+
 /** 從 oEmbed 服務取得標題與頻道 */
 async function fetchFromOEmbed(videoId) {
   const url = "https://www.youtube.com/watch?v=" + videoId;
