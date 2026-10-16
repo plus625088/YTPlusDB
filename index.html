@@ -91,8 +91,13 @@
           <input type="text" id="channel-input" placeholder="頻道名稱">
           <label>發布日期</label>
           <span id="pub-date" class="small" style="padding:6px 0;font-variant-numeric:tabular-nums"></span>
-          <label for="tags-input">Hashtag</label>
-          <input type="text" id="tags-input" placeholder="#演唱會 #必看（用空白分開）">
+          <label for="tag-add-input" class="tag-label">Hashtag</label>
+          <!-- 目前的 Hashtag 用獨立標籤顯示；管理者可以按 ✕ 移除、在下方輸入後按 Enter 新增 -->
+          <div class="tag-editor" id="tag-editor">
+            <div class="tags" id="tag-chips"></div>
+            <input type="text" id="tag-add-input" list="tag-suggest" maxlength="40" placeholder="輸入新的 Hashtag，按 Enter 加入" autocomplete="off">
+            <datalist id="tag-suggest"></datalist>
+          </div>
         </div>
         <div class="vid-actions">
           <a class="small muted" id="yt-link" href="#" target="_blank" rel="noopener noreferrer">在 YouTube 開啟 ↗</a>

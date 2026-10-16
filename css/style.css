@@ -1336,3 +1336,50 @@ details.panel summary {
     grid-column:1 / -1;
   }
 }
+
+/* ---------- 影片頁：Hashtag 標籤編輯 ---------- */
+.meta-grid .tag-label {
+  align-self:start;
+  padding-top:4px;
+}
+
+.tag-editor {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  min-width:0;
+}
+
+.tag-chip {
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  padding-right:2px;
+  cursor:default;
+}
+
+.tag-chip .tag-x {
+  border:0;
+  background:transparent;
+  color:inherit;
+  cursor:pointer;
+  width:20px;
+  height:20px;
+  border-radius:50%;
+  font-size:14px;
+  line-height:1;
+  display:inline-grid;
+  place-items:center;
+  opacity:.6;
+}
+
+.tag-chip .tag-x:hover,
+.tag-chip .tag-x:focus-visible {
+  opacity:1;
+  background:color-mix(in srgb,var(--fg) 12%,transparent);
+}
+
+.tag-editor .tag-empty {
+  font-size:13px;
+  color:var(--muted);
+}

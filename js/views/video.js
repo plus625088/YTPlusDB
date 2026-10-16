@@ -1,10 +1,10 @@
 /**
  * 「影片」分頁：內嵌播放器、時間點列表、補充評論、快速新增、管理者刪除。
  */
-import { CLOUD, LIMITS } from "../config.js";
+import { CLOUD, LIMITS, PENDING_TAG } from "../config.js";
 import { $, esc, toast, run, captureDrafts, restoreDrafts } from "../core/dom.js";
 import { state, getVideo, sortMarks, isAdmin, isMine, canEdit, getName, setName } from "../core/state.js";
-import { parseTime, formatTime, formatDate, parseTags, tagsToText, watchUrl, hasTime } from "../core/format.js";
+import { parseTime, formatTime, formatDate, parseTags, watchUrl, hasTime } from "../core/format.js";
 import { registerView, show, nav } from "../core/router.js";
 import {
   mountPlayer, seekTo, pausePlayer, currentTime, isPlayerReady, currentVideoData,
@@ -106,13 +106,13 @@ function renderMeta(force) {
   if (!v) return;
   const admin = isAdmin();
 
-  for (const [sel, value] of [["#title-input", v.title || ""], ["#channel-input", v.channel || ""], ["#tags-input", tagsToText(v.tags)]]) {
+  for (const [sel, value] of [["#title-input", v.title || ""], ["#channel-input", v.channel || ""]]) {
     const el = $(sel);
     el.readOnly = !admin;
     if (force || document.activeElement !== el) el.value = value; // 不要蓋掉正在輸入的內容
   }
   $("#channel-input").placeholder = admin ? "頻道名稱" : "—";
-  $("#tags-input").placeholder = admin ? "#演唱會 #必看（用空白分開）" : "—";
+  renderTagEditor(v, admin);
   $("#sample-chip").hidden = !v.sample;
   $("#pub-date").textContent = v.publishedAt ? formatDate(v.publishedAt) : "—";
   $("#yt-link").href = watchUrl(v.id);
@@ -122,6 +122,59 @@ function renderMeta(force) {
   $("#del-confirm-text").textContent =
     `「${v.title || "未命名影片"}」和它的 ${v.marks.length} 個時間點（包含其他人新增的）都會被刪除` +
     `${CLOUD ? "，所有人都看不到" : ""}，而且無法復原。`;
+}
+
+/* ================= Hashtag 標籤 ================= */
+
+/** 目前的 Hashtag 顯示成獨立標籤；管理者每個標籤有 ✕，下方有新增欄位 */
+function renderTagEditor(v, admin) {
+  const tags = v.tags || [];
+  $("#tag-chips").innerHTML = tags.length
+    ? tags.map((t) => `<span class="tag tag-chip${t === PENDING_TAG ? " pending" : ""}">#${esc(t)}${admin
+        ? `<button type="button" class="tag-x" data-remove-tag="${esc(t)}" aria-label="移除 #${esc(t)}" title="移除">×</button>` : ""}</span>`).join("")
+    : '<span class="tag-empty">還沒有 Hashtag</span>';
+
+  $("#tag-add-input").hidden = !admin;
+  if (!admin) return;
+  // 新增時的建議：網站上其他影片用過、這部影片還沒有的標籤
+  const used = new Set(state.db.videos.flatMap((x) => x.tags || []));
+  $("#tag-suggest").innerHTML = [...used].filter((t) => !tags.includes(t)).sort().map((t) => `<option value="${esc(t)}">`).join("");
+}
+
+async function saveTags(tags, message) {
+  if (!isAdmin()) return false;
+  return run(() => state.store.updateVideo(currentId, { tags }), message);
+}
+
+/** 輸入框按 Enter：加入一個或多個 Hashtag（可以一次輸入「#a #b」） */
+async function onTagInputKey(e) {
+  if (e.key !== "Enter" || e.isComposing) return; // 中文輸入法選字時的 Enter 不算
+  e.preventDefault();
+  const input = e.target;
+  const v = currentVideo();
+  if (!v) return;
+  const current = v.tags || [];
+  const added = parseTags(input.value).filter((t) => !current.includes(t));
+  if (!added.length) {
+    if (input.value.trim()) toast("這個 Hashtag 已經有了");
+    input.value = "";
+    return;
+  }
+  if (current.length + added.length > LIMITS.tags) { toast(`每部影片最多 ${LIMITS.tags} 個 Hashtag`); return; }
+  input.value = "";
+  const ok = await saveTags([...current, ...added], `已加入 ${added.map((t) => "#" + t).join(" ")}`);
+  if (!ok) input.value = added.join(" ");
+  input.focus();
+}
+
+/** 按標籤上的 ✕：移除這個 Hashtag */
+async function onTagChipClick(e) {
+  const btn = e.target.closest("[data-remove-tag]");
+  const v = currentVideo();
+  if (!btn || !v) return;
+  const tag = btn.dataset.removeTag;
+  btn.disabled = true;
+  await saveTags((v.tags || []).filter((t) => t !== tag), `已移除 #${tag}`);
 }
 
 /* ================= 時間點列表 ================= */
@@ -343,16 +396,13 @@ async function onQuickAdd(e) {
   }
 }
 
-/** 管理者修改標題、頻道、Hashtag */
+/** 管理者修改標題、頻道、Hashtag（Hashtag 的處理在上方「Hashtag 標籤」） */
 function bindMetaEditing() {
   const update = (patch, message) => { if (isAdmin()) run(() => state.store.updateVideo(currentId, patch), message); };
   $("#title-input").addEventListener("change", (e) => update({ title: e.target.value.trim().slice(0, LIMITS.title) }, "已更新標題"));
   $("#channel-input").addEventListener("change", (e) => update({ channel: e.target.value.trim().slice(0, LIMITS.channel) }, "已更新頻道"));
-  $("#tags-input").addEventListener("change", (e) => {
-    const tags = parseTags(e.target.value);
-    e.target.value = tagsToText(tags);
-    update({ tags }, "已更新 Hashtag");
-  });
+  $("#tag-add-input").addEventListener("keydown", onTagInputKey);
+  $("#tag-chips").addEventListener("click", onTagChipClick);
 }
 
 /** 管理者刪除整部影片（需在確認框再按一次） */
