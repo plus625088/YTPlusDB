@@ -52,6 +52,7 @@ function plannedRenames() {
 function renderRuleRow(r) {
   const opt = (value, label, current) => `<option value="${value}"${value === current ? " selected" : ""}>${label}</option>`;
   return `<div class="rule-row" data-id="${esc(r.id)}">
+    <button type="button" class="drag-handle" aria-label="拖曳調整順序（也可以用上下鍵）" title="拖曳調整順序">⠿</button>
     <select data-k="field" aria-label="判斷欄位">${opt("title", "標題", r.field)}${opt("channel", "頻道", r.field)}</select>
     <select data-k="op" aria-label="條件">${opt("contains", "包含", r.op)}${opt("notContains", "不包含", r.op)}</select>
     <input class="kw" type="text" data-k="keywords" value="${esc((r.keywords || []).join(", "))}" placeholder="關鍵字，例：會員專屬, 限定" aria-label="關鍵字">
@@ -94,6 +95,65 @@ function renderStatus() {
 
   $("#rules-check").disabled = dirty;
   $("#rules-check").title = dirty ? "請先儲存規則" : "";
+}
+
+/* ---------- 拖曳調整規則順序 ---------- */
+
+/**
+ * 按住左邊的 ⠿ 拖曳，滑鼠和手機觸控都可以；
+ * 也可以點一下 ⠿ 再按鍵盤上下鍵移動。
+ */
+function bindDragSort() {
+  const list = $("#rule-list");
+  let dragging = null;
+
+  const finish = () => {
+    if (!dragging) return;
+    dragging.classList.remove("dragging");
+    list.classList.remove("sorting");
+    dragging = null;
+    readForm();     // 依畫面上的新順序讀回 draft
+    renderStatus();
+  };
+
+  list.addEventListener("pointerdown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle || e.button > 0) return;
+    e.preventDefault();
+    dragging = handle.closest(".rule-row");
+    dragging.classList.add("dragging");
+    list.classList.add("sorting");
+    handle.setPointerCapture(e.pointerId);
+  });
+
+  list.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    // 找出指標所在位置的那一列，移到它的上方或下方
+    const rows = [...list.querySelectorAll(".rule-row")].filter((r) => r !== dragging);
+    const target = rows.find((r) => {
+      const box = r.getBoundingClientRect();
+      return e.clientY < box.top + box.height / 2;
+    });
+    if (target) { if (dragging.nextElementSibling !== target) list.insertBefore(dragging, target); }
+    else if (list.lastElementChild !== dragging) list.appendChild(dragging);
+  });
+
+  list.addEventListener("pointerup", finish);
+  list.addEventListener("pointercancel", finish);
+
+  // 鍵盤：焦點在 ⠿ 上時按上下鍵移動
+  list.addEventListener("keydown", (e) => {
+    const handle = e.target.closest(".drag-handle");
+    if (!handle || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const row = handle.closest(".rule-row");
+    const sibling = e.key === "ArrowUp" ? row.previousElementSibling : row.nextElementSibling;
+    if (!sibling) return;
+    if (e.key === "ArrowUp") list.insertBefore(row, sibling); else list.insertBefore(sibling, row);
+    handle.focus();
+    readForm();
+    renderStatus();
+  });
 }
 
 /* ---------- 儲存 ---------- */
@@ -193,6 +253,7 @@ export function initRules() {
   }
   $("#rules-test-title").addEventListener("input", renderStatus);
   $("#rules-test-channel").addEventListener("input", renderStatus);
+  bindDragSort();
   $("#rules-save").addEventListener("click", save);
   $("#rules-reset").addEventListener("click", loadDraft);
   $("#rules-check").addEventListener("click", checkExisting);

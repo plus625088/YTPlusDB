@@ -189,7 +189,7 @@ function render() {
     ? videos.map(renderCard).join("")
     : selected.size
       ? `<div class="empty" style="grid-column:1/-1">沒有符合這些 Hashtag 的影片。可以改成「符合任一」或取消部分標籤。</div>`
-      : `<div class="empty" style="grid-column:1/-1">還沒有任何紀錄。按「新增紀錄」貼上第一支 YouTube 影片網址。</div>`;
+      : `<div class="empty" style="grid-column:1/-1">還沒有任何紀錄。按「新增」貼上第一支 YouTube 影片網址。</div>`;
 
   // 縮圖載入失敗就移除，露出底下的影片 ID
   grid.querySelectorAll(".thumb img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));

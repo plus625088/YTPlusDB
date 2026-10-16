@@ -1,5 +1,5 @@
 /**
- * 「新增紀錄」分頁下方的「備份與還原」：匯出 JSON、管理者匯入 JSON。
+ * 「新增」分頁下方的「備份與還原」：匯出 JSON、管理者匯入 JSON。
  */
 import { CLOUD } from "../config.js";
 import { $, toast, run } from "../core/dom.js";

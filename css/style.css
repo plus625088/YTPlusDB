@@ -1087,7 +1087,7 @@ mark {
   overflow-wrap:anywhere;
 }
 
-/* ---------- 新增紀錄、表單 ---------- */
+/* ---------- 新增、表單 ---------- */
 .panel {
   background:var(--surface);
   border:1px solid var(--line);
@@ -1535,7 +1535,7 @@ body:has(#view-library.bulk-mode:not([hidden])) .toast {
 
 .rule-row {
   display:grid;
-  grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,150px) auto;
+  grid-template-columns:auto auto auto minmax(0,1fr) auto minmax(0,150px) auto;
   gap:8px;
   align-items:center;
   padding:8px;
@@ -1559,7 +1559,12 @@ body:has(#view-library.bulk-mode:not([hidden])) .toast {
 
 @media (max-width:640px) {
   .rule-row {
-    grid-template-columns:1fr 1fr auto;
+    grid-template-columns:auto 1fr 1fr auto;
+  }
+
+  .rule-row [data-del-rule] {
+    grid-row:1;
+    grid-column:4;
   }
 
   .rule-row .kw {
@@ -1567,11 +1572,12 @@ body:has(#view-library.bulk-mode:not([hidden])) .toast {
   }
 
   .rule-row .arrow {
-    grid-column:1;
+    grid-column:1 / 3;
+    justify-self:end;
   }
 
   .rule-row .tag-input-wrap {
-    grid-column:2;
+    grid-column:3 / 5;
   }
 }
 
@@ -1612,4 +1618,35 @@ body:has(#view-library.bulk-mode:not([hidden])) .toast {
     padding:5px 4px;
     font-size:13px;
   }
+}
+
+/* 規則拖曳 */
+.drag-handle {
+  border:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:18px;
+  line-height:1;
+  padding:6px 4px;
+  border-radius:6px;
+  cursor:grab;
+  touch-action:none; /* 手機上拖曳時不要捲動頁面 */
+}
+
+.drag-handle:hover,
+.drag-handle:focus-visible {
+  color:var(--fg);
+  background:var(--surface-2);
+}
+
+.rule-list.sorting {
+  cursor:grabbing;
+  user-select:none;
+}
+
+.rule-row.dragging {
+  border-color:var(--accent);
+  box-shadow:0 4px 14px rgba(0,0,0,.15);
+  background:var(--surface);
+  opacity:.95;
 }
