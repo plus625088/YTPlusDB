@@ -35,20 +35,12 @@ export const FIREBASE_SDK_VERSION = "10.12.2";
 export const CLOUD = Boolean(FIREBASE_CONFIG.projectId);
 
 /**
- * 沒有任何時間碼與說明的影片，會自動加上這個 Hashtag；
- * 有人補上第一個時間點後自動移除。（firestore.rules 裡也有用到這個字，要一起改）
+ * 自動標籤（會員、公開、待補…）的規則改在網站的「標籤規則」頁設定，存在資料庫裡。
+ * 預設規則見 js/core/autotag.js 的 DEFAULT_SETTINGS。
  */
-export const PENDING_TAG = "待補";
 
-/**
- * 會員影片：新增影片時，標題含有 MEMBER_KEYWORD 就自動加上 MEMBER_TAG，否則加上 NON_MEMBER_TAG。
- * 已經有其中一個標籤的影片不會再更動（可以手動修改）。
- */
-export const MEMBER_KEYWORD = "會員專屬";
-export const MEMBER_TAG = "會員";
-export const NON_MEMBER_TAG = "公開";
 /** 以前用過的標籤名稱：管理者開啟網站時，會自動把舊名稱改成新名稱 */
-export const RENAMED_TAGS = { "非會員": NON_MEMBER_TAG };
+export const RENAMED_TAGS = { "非會員": "公開" };
 
 /** 各欄位的長度上限（要和 firestore.rules 一致） */
 export const LIMITS = {

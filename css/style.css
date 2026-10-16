@@ -1479,3 +1479,137 @@ details.panel summary {
 body:has(#view-library.bulk-mode:not([hidden])) .toast {
   bottom:calc(var(--bulk-h, 160px) + 12px + env(safe-area-inset-bottom,0px));
 }
+
+/* ---------- 自動標籤（和手動標籤用不同顏色） ---------- */
+:root {
+  --auto-bg:#e2edfb;
+  --auto-fg:#1d4f91;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --auto-bg:#16273d;
+    --auto-fg:#8fbaf3;
+  }
+}
+
+:root[data-theme="dark"] {
+  --auto-bg:#16273d;
+  --auto-fg:#8fbaf3;
+}
+
+.tag.auto {
+  background:var(--auto-bg);
+  color:var(--auto-fg);
+}
+
+.tag.auto[aria-pressed="true"] {
+  background:var(--auto-fg);
+  color:var(--surface);
+}
+
+/* ---------- 標籤規則頁 ---------- */
+.rules-layout {
+  display:grid;
+  grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);
+  gap:20px;
+  align-items:start;
+}
+
+@media (max-width:900px) {
+  .rules-layout {
+    grid-template-columns:minmax(0,1fr);
+  }
+}
+
+.rules-panel {
+  max-width:none;
+  gap:12px;
+}
+
+.rule-list {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.rule-row {
+  display:grid;
+  grid-template-columns:auto auto minmax(0,1fr) auto minmax(0,150px) auto;
+  gap:8px;
+  align-items:center;
+  padding:8px;
+  border:1px solid var(--line);
+  border-radius:8px;
+  background:var(--bg);
+}
+
+.rule-row input {
+  padding:6px 10px;
+}
+
+.rule-row select {
+  padding:6px 8px;
+}
+
+.rule-row .arrow {
+  color:var(--muted);
+  white-space:nowrap;
+}
+
+@media (max-width:640px) {
+  .rule-row {
+    grid-template-columns:1fr 1fr auto;
+  }
+
+  .rule-row .kw {
+    grid-column:1 / -1;
+  }
+
+  .rule-row .arrow {
+    grid-column:1;
+  }
+
+  .rule-row .tag-input-wrap {
+    grid-column:2;
+  }
+}
+
+.tag-input-wrap {
+  display:inline-flex;
+  align-items:center;
+  gap:2px;
+  color:var(--auto-fg);
+  font-weight:700;
+}
+
+.tag-input-wrap input {
+  width:100%;
+  min-width:80px;
+}
+
+.pending-row {
+  gap:8px;
+  cursor:pointer;
+}
+
+.pending-row .tag-input-wrap input {
+  width:120px;
+}
+
+.apply-list {
+  max-height:240px;
+  overflow:auto;
+  font-size:13px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+/* 管理者有 5 個選單，手機上縮小一點 */
+@media (max-width:560px) {
+  nav button {
+    padding:5px 4px;
+    font-size:13px;
+  }
+}

@@ -30,6 +30,11 @@ service cloud.firestore {
     function isAutoId(id) { return id.matches('^[A-Za-z0-9]{20}$'); }       // Firestore 自動 ID
     function data() { return request.resource.data; }
     function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    // 「待補」標籤的名稱（在網站的「標籤規則」頁設定，沒設定時是「待補」）
+    function pendingTagName() {
+      let path = /databases/$(database)/documents/settings/autoTags;
+      return exists(path) ? get(path).data.pending.tag : '待補';
+    }
     function ownedBySelf() {
       return signedIn() && 'uid' in resource.data && resource.data.uid == request.auth.uid;
     }
@@ -55,7 +60,7 @@ service cloud.firestore {
         && changed().hasOnly(['updatedAt', 'tags', 'title', 'channel', 'publishedAt'])
         && (!('updatedAt' in changed()) || data().updatedAt == request.time)
         && tagList(data().tags)
-        && data().tags.hasAll(resource.data.tags.removeAll(['待補']))   // 只能新增 Hashtag，唯一能移除的是「待補」
+        && data().tags.hasAll(resource.data.tags.removeAll([pendingTagName()]))   // 只能新增 Hashtag，唯一能移除的是「待補」
         && str(data().title, 200)
         && str(data().channel, 100)
         && (data().title == resource.data.title || resource.data.title == '')
@@ -65,6 +70,18 @@ service cloud.firestore {
       );
 
       allow delete: if isAdmin();
+    }
+
+    // ---------- 自動標籤規則：settings/autoTags ----------
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && settingId == 'autoTags'
+        && data().keys().hasOnly(['rules', 'pending', 'updatedAt'])
+        && data().rules is list && data().rules.size() <= 50
+        && data().pending is map
+        && nonEmptyStr(data().pending.tag, 40)
+        && data().pending.enabled is bool;
     }
 
     // ---------- 時間點：marks/{自動ID} ----------

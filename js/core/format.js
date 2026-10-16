@@ -2,7 +2,7 @@
  * 資料解析與格式化：YouTube 網址、時間碼、日期、Hashtag。
  * 這裡都是「純函式」（不碰畫面），方便測試。
  */
-import { LIMITS, PENDING_TAG, MEMBER_KEYWORD, MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
+import { LIMITS } from "../config.js";
 
 const VIDEO_ID = /^[\w-]{11}$/;
 
@@ -98,32 +98,6 @@ export function parseTags(input) {
     if (tag && !tags.includes(tag)) tags.push(tag);
   }
   return tags.slice(0, LIMITS.tags);
-}
-
-/**
- * 依影片有沒有時間點，加上或移除「待補」標籤。
- * 回傳新的陣列（不修改原本的）。
- */
-export function withPendingTag(tags, hasMarks) {
-  const rest = (tags || []).filter((t) => t !== PENDING_TAG);
-  return hasMarks ? rest : [...rest, PENDING_TAG].slice(-LIMITS.tags);
-}
-
-/** 依標題判斷該加的會員標籤（標題是空的時候回傳 null，等抓到標題再判斷） */
-export function memberTagFor(title) {
-  if (!title) return null;
-  return title.includes(MEMBER_KEYWORD) ? MEMBER_TAG : NON_MEMBER_TAG;
-}
-
-/**
- * 影片還沒有「會員」或「公開」標籤時，依標題自動加上。
- * 已經有其中一個（例如手動改過）就不更動。回傳新的陣列。
- */
-export function withMemberTag(tags, title) {
-  const list = tags || [];
-  const tag = memberTagFor(title);
-  if (!tag || list.includes(MEMBER_TAG) || list.includes(NON_MEMBER_TAG)) return list;
-  return [...list, tag].slice(0, LIMITS.tags);
 }
 
 /** 兩個標籤陣列內容是否相同（不管順序） */

@@ -3,6 +3,7 @@
  *
  * 檔案結構：
  *   config.js            設定（Firebase、管理者、YouTube API 金鑰）
+ *   core/autotag.js      自動標籤規則（規則內容存在資料庫，可在「標籤規則」頁修改）
  *   core/                共用工具：畫面小工具、格式解析、全站狀態、分頁切換
  *   data/                資料層：local-store（單機）、cloud-store（Firebase）
  *   youtube/             播放器、影片資訊查詢
@@ -22,6 +23,7 @@ import { initSearch } from "./views/search.js";
 import { initAdd } from "./views/add.js";
 import { initBackup, updateBackupVisibility } from "./views/backup.js";
 import { initImport, updateImportVisibility } from "./views/import.js";
+import { initRules, updateRulesVisibility } from "./views/rules.js";
 
 /** 管理者開啟網站時，把改過名的舊標籤（例如「非會員」→「公開」）一次換掉 */
 let migrating = false;
@@ -47,6 +49,7 @@ async function migrateRenamedTags() {
 function onAnyChange() {
   renderAuth();
   updateImportVisibility();
+  updateRulesVisibility();
   updateBackupVisibility();
   refreshCurrentView();
   if (state.loaded) backfillVideoMeta();
@@ -83,6 +86,7 @@ async function start() {
   initAdd();
   initBackup();
   initImport();
+  initRules();
   bindNavButtons();
   onChange(onAnyChange);
 

@@ -1,7 +1,8 @@
 /**
  * 「影片」分頁：內嵌播放器、時間點列表、補充評論、快速新增、管理者刪除。
  */
-import { CLOUD, LIMITS, PENDING_TAG } from "../config.js";
+import { CLOUD, LIMITS } from "../config.js";
+import { tagClass, sortTags } from "../core/autotag.js";
 import { $, esc, toast, run, captureDrafts, restoreDrafts } from "../core/dom.js";
 import { state, getVideo, sortMarks, isAdmin, isMine, canEdit, getName, setName } from "../core/state.js";
 import { parseTime, formatTime, formatDate, parseTags, watchUrl, hasTime } from "../core/format.js";
@@ -138,7 +139,7 @@ function fitTitle() {
 function renderTagEditor(v, admin) {
   const tags = v.tags || [];
   $("#tag-chips").innerHTML = tags.length
-    ? tags.map((t) => `<span class="tag tag-chip${t === PENDING_TAG ? " pending" : ""}">#${esc(t)}${admin
+    ? sortTags(tags).map((t) => `<span class="${tagClass(t)} tag-chip">#${esc(t)}${admin
         ? `<button type="button" class="tag-x" data-remove-tag="${esc(t)}" aria-label="移除 #${esc(t)}" title="移除">×</button>` : ""}</span>`).join("")
     : '<span class="tag-empty">還沒有 Hashtag</span>';
 

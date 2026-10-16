@@ -4,8 +4,8 @@
 import { LIMITS } from "../config.js";
 import { $, run } from "../core/dom.js";
 import { state, getVideo, getName, setName } from "../core/state.js";
-import { parseVideoId, parseUrlTime, parseTime, formatTime, parseTags, tagsToText, memberTagFor } from "../core/format.js";
-import { MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
+import { parseVideoId, parseUrlTime, parseTime, formatTime, parseTags, tagsToText } from "../core/format.js";
+import { tagsFromRules, pendingTag } from "../core/autotag.js";
 import { registerView, nav } from "../core/router.js";
 import { fetchVideoMeta } from "../youtube/meta.js";
 import { openVideo } from "./video.js";
@@ -62,17 +62,17 @@ function setMetaFields(title, channel, locked, placeholder) {
   updateMemberHint();
 }
 
-/** 顯示這部影片會被加上哪個會員標籤 */
+/** 顯示這部影片會被自動加上哪些標籤 */
 function updateMemberHint() {
   const hint = $("#member-hint");
   const existing = getVideo(parseVideoId($("#add-url").value));
-  const tag = memberTagFor($("#add-title").value.trim());
-  if (existing && (existing.tags.includes(MEMBER_TAG) || existing.tags.includes(NON_MEMBER_TAG))) {
-    hint.textContent = `這部影片已標記為 #${existing.tags.includes(MEMBER_TAG) ? MEMBER_TAG : NON_MEMBER_TAG}。`;
+  const tags = tagsFromRules({ title: $("#add-title").value.trim(), channel: $("#add-channel").value.trim() });
+  if (existing) {
+    hint.textContent = "這部影片已經在網站上，不會再自動加標籤。";
+  } else if (!$("#add-title").value.trim()) {
+    hint.textContent = "會依「標籤規則」自動加上 Hashtag。";
   } else {
-    hint.textContent = tag
-      ? `會自動加上 #${tag} 標籤。`
-      : `標題含有「會員專屬」會自動加上 #會員，否則加上 #${NON_MEMBER_TAG}。`;
+    hint.textContent = tags.length ? `會自動加上 ${tags.map((t) => "#" + t).join(" ")}。` : "沒有符合的自動標籤規則。";
   }
 }
 
@@ -149,7 +149,7 @@ async function onSubmit(e) {
     title: $("#add-title").value.trim().slice(0, LIMITS.title),
     channel: $("#add-channel").value.trim().slice(0, LIMITS.channel),
     tags: parseTags($("#add-tags").value),
-  }), marks.length ? `已儲存 ${marks.length} 筆` : "已儲存影片（標記為 #待補）");
+  }), marks.length ? `已儲存 ${marks.length} 筆` : pendingTag() ? `已儲存影片（標記為 #${pendingTag()}）` : "已儲存影片");
 
   button.disabled = false;
   button.textContent = "儲存紀錄";

@@ -13,6 +13,7 @@ import { state, getVideo, isAdmin, getName } from "../core/state.js";
 import { parseVideoId, parseTime, formatTime, parseTags, tagsToText, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
 import { fetchVideoMeta, parsePlaylistId, fetchPlaylist } from "../youtube/meta.js";
+import { pendingTag } from "../core/autotag.js";
 
 const SHEETJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 
@@ -223,7 +224,7 @@ function renderPlan() {
     ? plan.map((i) => `<tr class="${i.status === "error" ? "err" : ""}">
         <td class="num">${i.line}</td>
         <td>${videoLabel(i)}</td>
-        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : i.videoOnly ? (getVideo(i.id) ? '<span class="muted">—</span>' : '<span class="tag pending">#待補</span>') : '<span class="tc-chip no-time">整部</span>'}</td>
+        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : i.videoOnly ? (getVideo(i.id) || !pendingTag() ? '<span class="muted">—</span>' : `<span class="tag pending">#${esc(pendingTag())}</span>`) : '<span class="tc-chip no-time">整部</span>'}</td>
         <td>${esc(i.note)}</td>
         <td>${esc(i.author)}</td>
         <td>${esc(tagsToText(i.tags))}</td>

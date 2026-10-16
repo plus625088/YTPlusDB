@@ -19,6 +19,7 @@ js/
     format.js           解析與格式化：YouTube 網址、時間碼、日期、Hashtag
     state.js            全站共用狀態、權限判斷、記住使用者名字
     router.js           分頁切換
+    autotag.js          自動標籤規則（會員、公開、待補…）
   data/
     cloud-store.js      雲端模式：Firebase Firestore 讀寫、登入
     local-store.js      單機模式：資料存在瀏覽器
@@ -34,6 +35,7 @@ js/
     add.js              新增紀錄
     backup.js           備份與還原
     import.js           批次匯入（管理者）
+    rules.js            自動標籤規則（管理者）
 ```
 
 兩種資料層（`cloud-store.js`、`local-store.js`）提供一模一樣的函式，畫面程式不需要知道目前用哪一種。
@@ -44,6 +46,7 @@ js/
 |---|---|
 | 新增或移除管理者 | `js/config.js` 的 `ADMIN_EMAILS`，**以及** `firestore.rules` 的 `isAdmin()`，再到 Firebase 發布規則 |
 | 換 YouTube API 金鑰 | `js/config.js` 的 `YT_API_KEY` |
+| 改自動加標籤的規則 | 網站的「標籤規則」頁（管理者） |
 | 改顏色、字體 | `css/style.css` 最上方的 `:root` 變數 |
 | 加入新的外部服務 | `index.html` 的 Content-Security-Policy 要加上該網域 |
 

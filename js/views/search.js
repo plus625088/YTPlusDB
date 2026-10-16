@@ -5,6 +5,7 @@ import { $, esc } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";
 import { formatTime, hasTime } from "../core/format.js";
 import { registerView } from "../core/router.js";
+import { tagClass, sortTags } from "../core/autotag.js";
 import { openVideo } from "./video.js";
 
 /** 先跳脫 HTML，再把關鍵字用 <mark> 標起來 */
@@ -79,7 +80,7 @@ function render() {
     const meta = v.channel || (v.tags || []).length
       ? `<div class="row small" style="gap:8px">
           ${v.channel ? `<span class="channel">${highlight(v.channel, terms)}</span>` : ""}
-          ${(v.tags || []).map((t) => `<span class="tag">${highlight("#" + t, terms)}</span>`).join("")}
+          ${sortTags(v.tags).map((t) => `<span class="${tagClass(t)}">${highlight("#" + t, terms)}</span>`).join("")}
         </div>` : "";
     return `<div class="result">
       <div class="result-head">

@@ -16,9 +16,8 @@
 import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, LIMITS } from "../config.js";
 import { toast } from "../core/dom.js";
 import { state, emitChange, isAdmin } from "../core/state.js";
-import { isVideoId, hasTime, withPendingTag, withMemberTag, memberTagFor, sameTags } from "../core/format.js";
-import { MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
-import { PENDING_TAG } from "../config.js";
+import { isVideoId, hasTime, sameTags } from "../core/format.js";
+import { withPendingTag, withRuleTags, tagsFromRules, pendingTag, normalizeSettings, DEFAULT_SETTINGS } from "../core/autotag.js";
 
 /** Firestore 自動產生的文件 ID 一律是 20 碼英數 */
 const DOC_ID = /^[A-Za-z0-9]{20}$/;
@@ -34,7 +33,7 @@ export async function createCloudStore() {
     import(base + "firebase-firestore.js"),
     import(base + "firebase-auth.js"),
   ]);
-  const { getFirestore, collection, doc, onSnapshot, writeBatch, updateDoc, serverTimestamp, arrayUnion, arrayRemove } = fs;
+  const { getFirestore, collection, doc, onSnapshot, writeBatch, updateDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } = fs;
 
   const app = initializeApp(FIREBASE_CONFIG);
   const db = getFirestore(app);
@@ -166,6 +165,11 @@ export async function createCloudStore() {
 
   return {
     start() {
+      // 自動標籤規則（文件不存在時用預設值）
+      onSnapshot(doc(db, "settings", "autoTags"), (snap) => {
+        state.settings = normalizeSettings(snap.exists() ? snap.data() : DEFAULT_SETTINGS);
+        emitChange();
+      }, (e) => console.warn("讀取自動標籤規則失敗", e));
       listen("videos");
       listen("marks");
       listen("comments");
@@ -180,15 +184,14 @@ export async function createCloudStore() {
       const old = raw.videos.get(id);
       if (!old) {
         batch.set(videoRef(id), {
-          title, channel, tags: withPendingTag(withMemberTag(tags, title), marks.length > 0), createdBy: author,
+          title, channel, tags: withPendingTag(withRuleTags(tags, { title, channel }), marks.length > 0), createdBy: author,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       } else {
         const patch = { updatedAt: serverTimestamp() };
         // 合併 Hashtag，並依有無時間點加上或移除「待補」
         const oldTags = old.tags || [];
-        const merged = withMemberTag([...new Set([...oldTags, ...tags])], old.title || title);
-        const newTags = withPendingTag(merged, marks.length > 0 || videoHasMarks(id));
+        const newTags = withPendingTag([...new Set([...oldTags, ...tags])], marks.length > 0 || videoHasMarks(id));
         if (!sameTags(oldTags, newTags)) patch.tags = newTags;
         // 一般人只能補上原本空白的標題、頻道；管理者可以覆蓋
         if (title && (isAdmin() || !old.title)) patch.title = title;
@@ -210,12 +213,27 @@ export async function createCloudStore() {
       if (!old) return;
       const changes = {};
       for (const key in patch) if (!old[key] && patch[key]) changes[key] = patch[key];
-      // 剛補上標題時，順便依標題加上「會員／公開」標籤
-      const oldTags = old.tags || [];
-      if (changes.title && !oldTags.includes(MEMBER_TAG) && !oldTags.includes(NON_MEMBER_TAG)) {
-        changes.tags = arrayUnion(memberTagFor(changes.title));
+      // 第一次抓到標題時，套用自動標籤規則
+      if (changes.title) {
+        const oldTags = old.tags || [];
+        const add = tagsFromRules({ title: changes.title, channel: changes.channel || old.channel }).filter((t) => !oldTags.includes(t));
+        if (add.length) changes.tags = arrayUnion(...add);
       }
       if (Object.keys(changes).length) await updateDoc(videoRef(id), changes);
+    },
+
+    /** 一次設定多部影片的 Hashtag：changes = { 影片ID: 新的標籤陣列 }（只有管理者能用） */
+    async setTagsMany(changes) {
+      const entries = Object.entries(changes).filter(([id]) => raw.videos.has(id));
+      await commitInChunks(entries.map(([id, tags]) => (b) => b.update(videoRef(id), { tags: tags.slice(0, LIMITS.tags) })));
+      return entries.length;
+    },
+
+    /* ----- 自動標籤規則（只有管理者能修改） ----- */
+
+    async saveSettings(settings) {
+      const s = normalizeSettings(settings);
+      await setDoc(doc(db, "settings", "autoTags"), { ...s, updatedAt: serverTimestamp() });
     },
 
     /** 批次替多部影片加入／移除 Hashtag（只有管理者能用），回傳實際有變動的影片數 */
@@ -257,7 +275,8 @@ export async function createCloudStore() {
       const batch = writeBatch(db);
       batch.set(newMarkRef(), withUid({ videoId, t, note, author, createdAt: serverTimestamp() }));
       const patch = { updatedAt: serverTimestamp() };
-      if ((raw.videos.get(videoId)?.tags || []).includes(PENDING_TAG)) patch.tags = arrayRemove(PENDING_TAG);
+      const p = pendingTag();
+      if (p && (raw.videos.get(videoId)?.tags || []).includes(p)) patch.tags = arrayRemove(p);
       batch.update(videoRef(videoId), patch);
       await batch.commit();
     },
@@ -272,7 +291,7 @@ export async function createCloudStore() {
       batch.delete(markRef(markId));
       // 刪掉最後一個時間點時，影片變回「待補」
       const videoMarks = [...raw.marks].filter(([k, m]) => m.videoId === videoId && k !== markId);
-      if (!videoMarks.length) batch.update(videoRef(videoId), { tags: arrayUnion(PENDING_TAG) });
+      if (!videoMarks.length && pendingTag()) batch.update(videoRef(videoId), { tags: arrayUnion(pendingTag()) });
       await batch.commit();
     },
 
@@ -315,7 +334,7 @@ export async function createCloudStore() {
 
         if (!old) {
           batch.set(videoRef(nv.id), {
-            title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(withMemberTag(nv.tags || [], nv.title), hasMarks), createdBy: "匯入",
+            title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(withRuleTags(nv.tags || [], nv), hasMarks), createdBy: "匯入",
             ...(Number.isInteger(nv.publishedAt) && nv.publishedAt > 0 ? { publishedAt: nv.publishedAt } : {}),
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           });
@@ -323,8 +342,7 @@ export async function createCloudStore() {
         } else {
           const patch = {};
           const oldTags = old.tags || [];
-          const merged = withMemberTag([...new Set([...oldTags, ...(nv.tags || [])])], old.title || nv.title);
-          const newTags = withPendingTag(merged, hasMarks);
+          const newTags = withPendingTag([...new Set([...oldTags, ...(nv.tags || [])])], hasMarks);
           if (!sameTags(oldTags, newTags)) patch.tags = newTags;
           if (!old.title && nv.title) patch.title = nv.title;
           if (!old.channel && nv.channel) patch.channel = nv.channel;

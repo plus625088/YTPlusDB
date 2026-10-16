@@ -19,6 +19,7 @@ export const state = {
   loaded: false,   // 第一批資料是否已載入
   user: null,      // Firebase 登入者（匿名或 Google）
   store: null,     // 資料層：local-store 或 cloud-store
+  settings: null,  // 自動標籤規則（見 core/autotag.js），還沒載入時用預設值
 };
 
 /* ---------- 變動通知 ---------- */

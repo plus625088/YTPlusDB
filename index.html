@@ -28,6 +28,7 @@
         <button data-nav="search" id="nav-search">搜尋</button>
         <button data-nav="add" id="nav-add">新增紀錄</button>
         <button data-nav="import" id="nav-import" hidden>批次匯入</button>
+        <button data-nav="rules" id="nav-rules" hidden>標籤規則</button>
       </nav>
       <div class="auth" id="auth-area" hidden></div>
     </div>
@@ -172,7 +173,7 @@
         <div class="field">
           <label for="add-title">影片標題 <span class="lock" id="title-lock">🔒 貼上網址後自動帶入</span></label>
           <input type="text" id="add-title" placeholder="貼上網址後自動帶入" maxlength="200" readonly>
-          <div class="hint" id="member-hint">標題含有「會員專屬」會自動加上 #會員，否則加上 #公開。</div>
+          <div class="hint" id="member-hint">會依「標籤規則」自動加上 Hashtag。</div>
         </div>
         <div class="two">
           <div class="field">
@@ -186,7 +187,7 @@
         </div>
         <div class="field">
           <label>時間碼與說明 <span class="muted small">（選填）</span></label>
-          <div class="hint">都可以不填：只填說明代表整部影片的說明；兩個都不填，影片會自動加上 <span class="tag pending">#待補</span> 標籤，等之後有人補上。時間可輸入 1:23、01:02:03、83（秒）或 1m23s。</div>
+          <div class="hint">都可以不填：只填說明代表整部影片的說明；兩個都不填，影片會自動標記為「待補」，等之後有人補上。時間可輸入 1:23、01:02:03、83（秒）或 1m23s。</div>
           <div class="stack" id="entries" style="gap:8px"></div>
           <div><button type="button" class="btn" id="add-entry">＋ 再加一筆時間點</button></div>
         </div>
@@ -235,7 +236,7 @@
       </div>
       <form class="panel" id="pl-form" style="gap:12px">
         <h2>或：匯入播放清單</h2>
-        <div class="hint">貼上 YouTube 播放清單網址，清單裡的影片會一次加入（沒有時間點，會標記為 #待補）。清單需設為公開或不公開，私人清單讀不到。</div>
+        <div class="hint">貼上 YouTube 播放清單網址，清單裡的影片會一次加入（沒有時間點，會標記為待補）。清單需設為公開或不公開，私人清單讀不到。</div>
         <div class="field">
           <label for="pl-url">播放清單網址</label>
           <input type="text" id="pl-url" placeholder="https://www.youtube.com/playlist?list=…" autocomplete="off">
@@ -254,6 +255,62 @@
       <div class="row">
         <button class="btn primary" id="imp-go" disabled>匯入</button>
         <span class="hint" id="imp-progress"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 自動標籤規則（管理者） -->
+  <section id="view-rules" hidden>
+    <div class="row" style="gap:10px;margin-bottom:6px"><h1>自動標籤規則</h1><span class="admin-badge">管理者</span></div>
+    <p class="muted" style="margin:0 0 18px;max-width:70ch">新增影片時（或第一次抓到影片標題時），依下面的規則自動加上 Hashtag。自動加上的標籤會用 <span class="tag auto">#藍色</span> 顯示，和手動加的標籤區分。</p>
+
+    <div class="rules-layout">
+      <div class="stack">
+        <div class="panel rules-panel">
+          <h2>依影片標題或頻道</h2>
+          <div class="hint">符合條件就加上右邊的 Hashtag。關鍵字可以填好幾個，用逗號分開，符合任一個就算；不分大小寫。</div>
+          <div class="rule-list" id="rule-list"></div>
+          <div><button type="button" class="btn sm" id="rule-add">＋ 新增規則</button></div>
+        </div>
+
+        <div class="panel rules-panel">
+          <h2>沒有時間點的影片</h2>
+          <label class="row pending-row" for="pending-enabled">
+            <input type="checkbox" id="pending-enabled">
+            <span>沒有任何時間碼和說明的影片，自動加上</span>
+            <span class="tag-input-wrap">#<input type="text" id="pending-tag" maxlength="40" aria-label="待補標籤名稱"></span>
+          </label>
+          <div class="hint">有人補上第一個時間點後，這個標籤會自動移除；刪掉最後一個時間點時會再加回來。</div>
+        </div>
+
+        <div class="row">
+          <button type="button" class="btn primary" id="rules-save" disabled>儲存規則</button>
+          <button type="button" class="btn" id="rules-reset" hidden>放棄修改</button>
+          <span class="hint" id="rules-status"></span>
+        </div>
+        <div class="hint" id="rules-rename-note"></div>
+      </div>
+
+      <div class="stack">
+        <div class="panel rules-panel">
+          <h2>試試看</h2>
+          <div class="field">
+            <label for="rules-test-title">影片標題</label>
+            <input type="text" id="rules-test-title" placeholder="例：【會員專屬】直播回放">
+          </div>
+          <div class="field">
+            <label for="rules-test-channel">頻道 <span class="muted small">（選填）</span></label>
+            <input type="text" id="rules-test-channel">
+          </div>
+          <div class="tags" id="rules-test-result"></div>
+        </div>
+
+        <div class="panel rules-panel">
+          <h2>套用到現有影片</h2>
+          <div class="hint">規則只會自動套用在新影片上。按下面的按鈕，可以讓網站上現有的影片也依目前規則補上缺少的標籤（不會移除任何標籤，「待補」會依有沒有時間點加上或移除）。</div>
+          <div><button type="button" class="btn" id="rules-check">檢查現有影片</button></div>
+          <div id="rules-apply-preview" class="stack" style="gap:8px" hidden></div>
+        </div>
       </div>
     </div>
   </section>

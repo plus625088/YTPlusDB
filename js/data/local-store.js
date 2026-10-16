@@ -4,10 +4,17 @@
  */
 import { makeId, storageGet, storageSet } from "../core/dom.js";
 import { state, emitChange } from "../core/state.js";
-import { isVideoId, withPendingTag, withMemberTag } from "../core/format.js";
+import { isVideoId } from "../core/format.js";
+import { withPendingTag, withRuleTags, normalizeSettings, DEFAULT_SETTINGS } from "../core/autotag.js";
 import { sampleData } from "./seed.js";
 
 const STORAGE_KEY = "yt-timecode-notes.v1";
+const SETTINGS_KEY = "yt-timecode-notes.settings";
+
+function loadSettings() {
+  try { return normalizeSettings(JSON.parse(storageGet(SETTINGS_KEY) || "null") || DEFAULT_SETTINGS); }
+  catch { return normalizeSettings(DEFAULT_SETTINGS); }
+}
 
 function loadFromBrowser() {
   let data = null;
@@ -35,8 +42,8 @@ export function createLocalStore() {
 
   /** 依有無時間點更新「待補」標籤 */
   const syncPending = (v) => { v.tags = withPendingTag(v.tags, v.marks.length > 0); };
-  /** 依標題補上「會員／公開」標籤 */
-  const syncMember = (v) => { v.tags = withMemberTag(v.tags, v.title); };
+  /** 依標題、頻道套用自動標籤規則（新影片、第一次抓到標題時） */
+  const applyRules = (v) => { v.tags = withRuleTags(v.tags, v); };
 
   /** 存回瀏覽器並通知畫面 */
   function save() {
@@ -47,6 +54,7 @@ export function createLocalStore() {
 
   return {
     start() {
+      state.settings = loadSettings();
       state.db = data;
       state.loaded = true;
       emitChange();
@@ -59,6 +67,7 @@ export function createLocalStore() {
       let v = findVideo(id);
       if (!v) {
         v = { id, title, channel, tags, marks: [], updatedAt: Date.now() };
+        applyRules(v);
         data.videos.push(v);
       } else {
         if (title) v.title = title;
@@ -66,7 +75,6 @@ export function createLocalStore() {
         v.tags = [...new Set([...(v.tags || []), ...tags])];
       }
       for (const m of marks) v.marks.push({ id: makeId(), t: m.t, note: m.note, author, comments: [] });
-      syncMember(v);
       syncPending(v);
       v.updatedAt = Date.now();
       save();
@@ -81,10 +89,30 @@ export function createLocalStore() {
     async fillEmpty(id, patch) {
       const v = findVideo(id);
       let changed = false;
+      const hadTitle = Boolean(v.title);
       for (const key in patch) {
         if (!v[key] && patch[key]) { v[key] = patch[key]; changed = true; }
       }
-      if (changed) { syncMember(v); save(); }
+      if (!hadTitle && v.title) applyRules(v); // 第一次抓到標題：套用自動標籤規則
+      if (changed) save();
+    },
+
+    /** 一次設定多部影片的 Hashtag：changes = { 影片ID: 新的標籤陣列 } */
+    async setTagsMany(changes) {
+      for (const [id, tags] of Object.entries(changes)) {
+        const v = findVideo(id);
+        if (v) v.tags = tags;
+      }
+      save();
+      return Object.keys(changes).length;
+    },
+
+    /* ----- 自動標籤規則 ----- */
+
+    async saveSettings(settings) {
+      state.settings = normalizeSettings(settings);
+      storageSet(SETTINGS_KEY, JSON.stringify(state.settings));
+      emitChange();
     },
 
     /** 批次替多部影片加入／移除 Hashtag，回傳實際有變動的影片數 */
@@ -167,6 +195,7 @@ export function createLocalStore() {
       let added = 0;
       for (const nv of videos) {
         let v = findVideo(nv.id);
+        const isNew = !v;
         if (!v) {
           v = { id: nv.id, title: "", channel: "", tags: [], marks: [], updatedAt: Date.now(), publishedAt: nv.publishedAt || 0 };
           data.videos.push(v);
@@ -189,7 +218,7 @@ export function createLocalStore() {
           });
           added++;
         }
-        syncMember(v);
+        if (isNew) applyRules(v);
         syncPending(v);
       }
       save();

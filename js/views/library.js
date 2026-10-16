@@ -4,15 +4,13 @@
 import { $, esc, storageGet, storageSet, toast, run } from "../core/dom.js";
 import { state, sortMarks, isAdmin } from "../core/state.js";
 import { formatTime, formatDate, hasTime, parseTags } from "../core/format.js";
-import { PENDING_TAG, MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
+import { tagClass, isAutoTag, sortTags } from "../core/autotag.js";
 import { registerView } from "../core/router.js";
 import { openVideo } from "./video.js";
 
 const SORT_KEY = "yt-timecode-notes.sort";
 const MATCH_KEY = "yt-timecode-notes.tag-match";
 
-/** 自動加上的系統標籤，改名會讓自動功能失效，所以不能在這裡改 */
-const SYSTEM_TAGS = [PENDING_TAG, MEMBER_TAG, NON_MEMBER_TAG];
 
 const selected = new Set();  // 目前選取的 Hashtag（可多選）
 let matchMode = "all";       // "all"：要有全部選取的標籤；"any"：有任一個即可
@@ -23,7 +21,6 @@ let bulkMode = false;        // 管理者：批次編輯 Hashtag
 const picked = new Set();    // 批次編輯時選取的影片
 let shownIds = [];           // 目前列出的影片（全選用）
 
-const tagClass = (t) => "tag" + (t === PENDING_TAG ? " pending" : "");
 
 /** 影片是否符合目前的 Hashtag 篩選 */
 function matchesFilter(v) {
@@ -96,9 +93,9 @@ function renderTagManage(names, counts) {
 
   box.innerHTML = `<div class="small muted">輸入新名稱後按「改名」，所有影片上的這個 Hashtag 會一起改。新名稱如果已經存在，兩個標籤會合併成一個。</div>` +
     names.map((t, i) => {
-      const system = SYSTEM_TAGS.includes(t);
+      const system = isAutoTag(t);
       const action = system
-        ? `<span class="small muted">自動標籤，無法改名</span>`
+        ? `<span class="small muted">自動標籤，請到「標籤規則」修改</span>`
         : `<button type="button" class="btn sm${confirmMerge === t ? " danger-outline" : ""}" data-rename="${esc(t)}">${confirmMerge === t ? "確定合併？" : "改名"}</button>`;
       return `<div class="tag-manage-row">
         <span class="tm-name"><span class="${tagClass(t)}">#${esc(t)}</span> <span class="small muted">${counts[t]} 部</span></span>
@@ -142,7 +139,7 @@ function renderCard(v) {
     .map((m) => `<div class="peek">${hasTime(m.t) ? `<span class="tc-chip">${formatTime(m.t)}</span>` : '<span class="tc-chip no-time">整部</span>'}<span>${esc(m.note)}</span></div>`)
     .join("");
   const byline = [v.channel && esc(v.channel), v.publishedAt && formatDate(v.publishedAt)].filter(Boolean).join(" · ");
-  const tags = (v.tags || []).map((t) => `<span class="${tagClass(t)}" data-filter="${esc(t)}" aria-pressed="${selected.has(t)}" title="加入篩選">#${esc(t)}</span>`).join("");
+  const tags = sortTags(v.tags).map((t) => `<span class="${tagClass(t)}" data-filter="${esc(t)}" aria-pressed="${selected.has(t)}" title="加入篩選">#${esc(t)}</span>`).join("");
 
   const isPicked = bulkMode && picked.has(v.id);
   return `<button class="card${bulkMode ? " selectable" : ""}${isPicked ? " picked" : ""}" data-open="${id}"${bulkMode ? ` aria-pressed="${isPicked}"` : ""}>
