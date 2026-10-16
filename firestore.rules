@@ -55,7 +55,7 @@ service cloud.firestore {
         && changed().hasOnly(['updatedAt', 'tags', 'title', 'channel', 'publishedAt'])
         && (!('updatedAt' in changed()) || data().updatedAt == request.time)
         && tagList(data().tags)
-        && data().tags.hasAll(resource.data.tags)
+        && data().tags.hasAll(resource.data.tags.removeAll(['待補']))   // 只能新增 Hashtag，唯一能移除的是「待補」
         && str(data().title, 200)
         && str(data().channel, 100)
         && (data().title == resource.data.title || resource.data.title == '')

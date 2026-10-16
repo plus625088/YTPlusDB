@@ -4,6 +4,7 @@
 import { $, esc, storageGet, storageSet } from "../core/dom.js";
 import { state, sortMarks } from "../core/state.js";
 import { formatTime, formatDate, hasTime } from "../core/format.js";
+import { PENDING_TAG } from "../config.js";
 import { registerView } from "../core/router.js";
 import { openVideo } from "./video.js";
 
@@ -43,7 +44,7 @@ function renderTagBar() {
   bar.hidden = !names.length || !tagsOpen;
   bar.innerHTML = !names.length ? "" :
     `<button class="tag" data-filter="" aria-pressed="${!tagFilter}">全部</button>` +
-    names.map((t) => `<button class="tag" data-filter="${esc(t)}" aria-pressed="${tagFilter === t}">#${esc(t)} <span class="muted">${counts[t]}</span></button>`).join("");
+    names.map((t) => `<button class="tag${t === PENDING_TAG ? " pending" : ""}" data-filter="${esc(t)}" aria-pressed="${tagFilter === t}">#${esc(t)} <span class="muted">${counts[t]}</span></button>`).join("");
 }
 
 function renderCard(v) {
@@ -53,7 +54,7 @@ function renderCard(v) {
     .map((m) => `<div class="peek">${hasTime(m.t) ? `<span class="tc-chip">${formatTime(m.t)}</span>` : '<span class="tc-chip no-time">整部</span>'}<span>${esc(m.note)}</span></div>`)
     .join("");
   const byline = [v.channel && esc(v.channel), v.publishedAt && formatDate(v.publishedAt)].filter(Boolean).join(" · ");
-  const tags = (v.tags || []).map((t) => `<span class="tag" data-filter="${esc(t)}">#${esc(t)}</span>`).join("");
+  const tags = (v.tags || []).map((t) => `<span class="tag${t === PENDING_TAG ? " pending" : ""}" data-filter="${esc(t)}">#${esc(t)}</span>`).join("");
 
   return `<button class="card" data-open="${id}">
     <div class="thumb">

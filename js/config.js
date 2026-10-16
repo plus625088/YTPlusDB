@@ -34,6 +34,12 @@ export const FIREBASE_SDK_VERSION = "10.12.2";
 /** 是否使用雲端資料庫 */
 export const CLOUD = Boolean(FIREBASE_CONFIG.projectId);
 
+/**
+ * 沒有任何時間碼與說明的影片，會自動加上這個 Hashtag；
+ * 有人補上第一個時間點後自動移除。（firestore.rules 裡也有用到這個字，要一起改）
+ */
+export const PENDING_TAG = "待補";
+
 /** 各欄位的長度上限（要和 firestore.rules 一致） */
 export const LIMITS = {
   title: 200,

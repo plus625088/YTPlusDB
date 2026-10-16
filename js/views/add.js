@@ -122,7 +122,6 @@ async function onSubmit(e) {
     if (timeText.trim() && t === null) return showError(`「${timeText}」不是有效的時間，例：1:23`, row.querySelector("input"));
     marks.push({ t, note });
   }
-  if (!marks.length) return showError("至少填一筆時間碼或說明。");
 
   const button = $("#add-submit");
   button.disabled = true;
@@ -134,7 +133,7 @@ async function onSubmit(e) {
     title: $("#add-title").value.trim().slice(0, LIMITS.title),
     channel: $("#add-channel").value.trim().slice(0, LIMITS.channel),
     tags: parseTags($("#add-tags").value),
-  }), `已儲存 ${marks.length} 筆`);
+  }), marks.length ? `已儲存 ${marks.length} 筆` : "已儲存影片（標記為 #待補）");
 
   button.disabled = false;
   button.textContent = "儲存紀錄";

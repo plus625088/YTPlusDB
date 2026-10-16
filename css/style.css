@@ -1245,3 +1245,14 @@ details.panel summary {
   font-family:var(--f-body);
   font-weight:500;
 }
+
+/* 「待補」標籤：提醒這部影片還沒有時間點 */
+.tag.pending {
+  background:var(--danger-bg);
+  color:var(--danger);
+}
+
+.tag.pending[aria-pressed="true"] {
+  background:var(--danger);
+  color:#fff;
+}

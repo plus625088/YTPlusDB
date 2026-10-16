@@ -4,7 +4,7 @@
  */
 import { makeId, storageGet, storageSet } from "../core/dom.js";
 import { state, emitChange } from "../core/state.js";
-import { isVideoId } from "../core/format.js";
+import { isVideoId, withPendingTag } from "../core/format.js";
 import { sampleData } from "./seed.js";
 
 const STORAGE_KEY = "yt-timecode-notes.v1";
@@ -32,6 +32,9 @@ export function createLocalStore() {
   const data = loadFromBrowser();
   const findVideo = (id) => data.videos.find((v) => v.id === id);
   const findMark = (videoId, markId) => findVideo(videoId).marks.find((m) => m.id === markId);
+
+  /** 依有無時間點更新「待補」標籤 */
+  const syncPending = (v) => { v.tags = withPendingTag(v.tags, v.marks.length > 0); };
 
   /** 存回瀏覽器並通知畫面 */
   function save() {
@@ -61,6 +64,7 @@ export function createLocalStore() {
         v.tags = [...new Set([...(v.tags || []), ...tags])];
       }
       for (const m of marks) v.marks.push({ id: makeId(), t: m.t, note: m.note, author, comments: [] });
+      syncPending(v);
       v.updatedAt = Date.now();
       save();
     },
@@ -90,6 +94,7 @@ export function createLocalStore() {
     async addMark(videoId, t, note, author) {
       const v = findVideo(videoId);
       v.marks.push({ id: makeId(), t, note, author, comments: [] });
+      syncPending(v);
       v.updatedAt = Date.now();
       save();
     },
@@ -102,6 +107,7 @@ export function createLocalStore() {
     async deleteMark(videoId, markId) {
       const v = findVideo(videoId);
       v.marks = v.marks.filter((m) => m.id !== markId);
+      syncPending(v);
       save();
     },
 
@@ -154,6 +160,7 @@ export function createLocalStore() {
           });
           added++;
         }
+        syncPending(v);
       }
       save();
       return added;

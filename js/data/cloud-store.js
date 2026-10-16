@@ -16,7 +16,8 @@
 import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, LIMITS } from "../config.js";
 import { toast } from "../core/dom.js";
 import { state, emitChange, isAdmin } from "../core/state.js";
-import { isVideoId, hasTime } from "../core/format.js";
+import { isVideoId, hasTime, withPendingTag, sameTags } from "../core/format.js";
+import { PENDING_TAG } from "../config.js";
 
 /** Firestore 自動產生的文件 ID 一律是 20 碼英數 */
 const DOC_ID = /^[A-Za-z0-9]{20}$/;
@@ -32,7 +33,7 @@ export async function createCloudStore() {
     import(base + "firebase-firestore.js"),
     import(base + "firebase-auth.js"),
   ]);
-  const { getFirestore, collection, doc, onSnapshot, writeBatch, updateDoc, serverTimestamp, arrayUnion } = fs;
+  const { getFirestore, collection, doc, onSnapshot, writeBatch, updateDoc, serverTimestamp, arrayUnion, arrayRemove } = fs;
 
   const app = initializeApp(FIREBASE_CONFIG);
   const db = getFirestore(app);
@@ -43,6 +44,9 @@ export async function createCloudStore() {
   const commentRef = (id) => doc(db, "comments", id);
   const newMarkRef = () => doc(collection(db, "marks"));
   const newCommentRef = () => doc(collection(db, "comments"));
+
+  /** 這部影片目前在資料庫裡有沒有時間點 */
+  const videoHasMarks = (id) => [...raw.marks.values()].some((m) => m.videoId === id);
 
   /** 寫入的資料加上建立者的 uid（匿名或 Google 登入） */
   const withUid = (data) => (auth.currentUser ? { ...data, uid: auth.currentUser.uid } : data);
@@ -175,12 +179,15 @@ export async function createCloudStore() {
       const old = raw.videos.get(id);
       if (!old) {
         batch.set(videoRef(id), {
-          title, channel, tags, createdBy: author,
+          title, channel, tags: withPendingTag(tags, marks.length > 0), createdBy: author,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       } else {
         const patch = { updatedAt: serverTimestamp() };
-        if (tags.length) patch.tags = arrayUnion(...tags);
+        // 合併 Hashtag，並依有無時間點加上或移除「待補」
+        const oldTags = old.tags || [];
+        const newTags = withPendingTag([...new Set([...oldTags, ...tags])], marks.length > 0 || videoHasMarks(id));
+        if (!sameTags(oldTags, newTags)) patch.tags = newTags;
         // 一般人只能補上原本空白的標題、頻道；管理者可以覆蓋
         if (title && (isAdmin() || !old.title)) patch.title = title;
         if (channel && (isAdmin() || !old.channel)) patch.channel = channel;
@@ -219,7 +226,9 @@ export async function createCloudStore() {
     async addMark(videoId, t, note, author) {
       const batch = writeBatch(db);
       batch.set(newMarkRef(), withUid({ videoId, t, note, author, createdAt: serverTimestamp() }));
-      batch.update(videoRef(videoId), { updatedAt: serverTimestamp() });
+      const patch = { updatedAt: serverTimestamp() };
+      if ((raw.videos.get(videoId)?.tags || []).includes(PENDING_TAG)) patch.tags = arrayRemove(PENDING_TAG);
+      batch.update(videoRef(videoId), patch);
       await batch.commit();
     },
 
@@ -231,6 +240,9 @@ export async function createCloudStore() {
       const batch = writeBatch(db);
       for (const [k, c] of raw.comments) if (c.markId === markId) batch.delete(commentRef(k));
       batch.delete(markRef(markId));
+      // 刪掉最後一個時間點時，影片變回「待補」
+      const videoMarks = [...raw.marks].filter(([k, m]) => m.videoId === videoId && k !== markId);
+      if (!videoMarks.length) batch.update(videoRef(videoId), { tags: arrayUnion(PENDING_TAG) });
       await batch.commit();
     },
 
@@ -267,15 +279,21 @@ export async function createCloudStore() {
 
       for (const nv of videos) {
         const old = raw.videos.get(nv.id);
+        const existing = [...raw.marks.values()].filter((m) => m.videoId === nv.id);
+        const newMarks = (nv.marks || []).filter((m) => !existing.some((x) => x.t === m.t && x.note === m.note));
+        const hasMarks = existing.length > 0 || newMarks.length > 0;
+
         if (!old) {
           batch.set(videoRef(nv.id), {
-            title: nv.title || "", channel: nv.channel || "", tags: nv.tags || [], createdBy: "匯入",
+            title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(nv.tags || [], hasMarks), createdBy: "匯入",
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           });
           count++;
         } else {
           const patch = {};
-          if ((nv.tags || []).length) patch.tags = arrayUnion(...nv.tags);
+          const oldTags = old.tags || [];
+          const newTags = withPendingTag([...new Set([...oldTags, ...(nv.tags || [])])], hasMarks);
+          if (!sameTags(oldTags, newTags)) patch.tags = newTags;
           if (!old.title && nv.title) patch.title = nv.title;
           if (!old.channel && nv.channel) patch.channel = nv.channel;
           if (Object.keys(patch).length) {
@@ -285,9 +303,7 @@ export async function createCloudStore() {
           }
         }
 
-        const existing = [...raw.marks.values()].filter((m) => m.videoId === nv.id);
-        for (const m of nv.marks || []) {
-          if (existing.some((x) => x.t === m.t && x.note === m.note)) continue;
+        for (const m of newMarks) {
           const ref = newMarkRef();
           batch.set(ref, withUid({
             videoId: nv.id, t: m.t, note: str(m.note, LIMITS.note),

@@ -2,7 +2,7 @@
  * 資料解析與格式化：YouTube 網址、時間碼、日期、Hashtag。
  * 這裡都是「純函式」（不碰畫面），方便測試。
  */
-import { LIMITS } from "../config.js";
+import { LIMITS, PENDING_TAG } from "../config.js";
 
 const VIDEO_ID = /^[\w-]{11}$/;
 
@@ -99,6 +99,18 @@ export function parseTags(input) {
   }
   return tags.slice(0, LIMITS.tags);
 }
+
+/**
+ * 依影片有沒有時間點，加上或移除「待補」標籤。
+ * 回傳新的陣列（不修改原本的）。
+ */
+export function withPendingTag(tags, hasMarks) {
+  const rest = (tags || []).filter((t) => t !== PENDING_TAG);
+  return hasMarks ? rest : [...rest, PENDING_TAG].slice(-LIMITS.tags);
+}
+
+/** 兩個標籤陣列內容是否相同（不管順序） */
+export const sameTags = (a = [], b = []) => a.length === b.length && a.every((t) => b.includes(t));
 
 /** ["演唱會", "現場"] → "#演唱會 #現場" */
 export const tagsToText = (tags) => (tags || []).map((t) => "#" + t).join(" ");

@@ -112,7 +112,13 @@ function buildPlan(rows) {
       item.t = item.timeText ? parseTime(item.timeText) : null; // 時間碼可不填
       if (!item.id) Object.assign(item, { status: "error", message: item.url ? "網址看不懂" : "缺少影片網址" });
       else if (item.timeText && item.t === null) Object.assign(item, { status: "error", message: `時間碼「${item.timeText}」看不懂` });
-      else if (item.t === null && !item.note) Object.assign(item, { status: "error", message: "時間碼和說明至少要填一個" });
+      else if (item.t === null && !item.note) {
+        // 只有網址：只建立影片，沒有時間點時會自動加上「待補」
+        item.videoOnly = true;
+        const key = `${item.id}|video`;
+        if (seen.has(key) || getVideo(item.id)) Object.assign(item, { status: "skip", message: "影片已存在，略過" });
+        else { seen.add(key); Object.assign(item, { status: "ok", message: "新影片（待補）" }); }
+      }
       else if (!item.author) Object.assign(item, { status: "error", message: "缺少建立者（可填上方的預設建立者）" });
       else {
         const key = `${item.id}|${item.t}|${item.note}`;
@@ -145,13 +151,14 @@ function videoLabel(item) {
 
 function renderPlan() {
   const ok = plan.filter((i) => i.status === "ok");
+  const okMarks = ok.filter((i) => !i.videoOnly);
   const errors = plan.filter((i) => i.status === "error");
   const skipped = plan.filter((i) => i.status === "skip");
   const videoIds = new Set(ok.map((i) => i.id));
   const newVideos = [...videoIds].filter((id) => !getVideo(id));
 
   $("#imp-sum").innerHTML = `
-    <div class="stat"><b>${ok.length}</b><span>個時間點會匯入</span></div>
+    <div class="stat"><b>${okMarks.length}</b><span>個時間點會匯入</span></div>
     <div class="stat"><b>${videoIds.size}</b><span>部影片（新 ${newVideos.length}）</span></div>
     <div class="stat"><b>${skipped.length}</b><span>列略過</span></div>
     <div class="stat${errors.length ? " bad" : ""}"><b>${errors.length}</b><span>列有錯誤</span></div>`;
@@ -162,7 +169,7 @@ function renderPlan() {
     ? plan.map((i) => `<tr class="${i.status === "error" ? "err" : ""}">
         <td class="num">${i.line}</td>
         <td>${videoLabel(i)}</td>
-        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : '<span class="tc-chip no-time">整部</span>'}</td>
+        <td>${hasTime(i.t) ? `<span class="tc-chip">${formatTime(i.t)}</span>` : i.timeText ? esc(i.timeText) : i.videoOnly ? '<span class="tag pending">#待補</span>' : '<span class="tc-chip no-time">整部</span>'}</td>
         <td>${esc(i.note)}</td>
         <td>${esc(i.author)}</td>
         <td>${esc(tagsToText(i.tags))}</td>
@@ -172,7 +179,8 @@ function renderPlan() {
 
   const go = $("#imp-go");
   go.disabled = !ok.length;
-  go.textContent = ok.length ? `匯入 ${ok.length} 個時間點` : "沒有可匯入的資料";
+  go.textContent = !ok.length ? "沒有可匯入的資料"
+    : okMarks.length ? `匯入 ${okMarks.length} 個時間點、${videoIds.size} 部影片` : `匯入 ${videoIds.size} 部影片`;
   setProgress(errors.length ? "有錯誤的列不會匯入。可以修改 Excel 後重新上傳，或直接匯入其餘的列。" : "");
 }
 
@@ -187,7 +195,7 @@ function groupByVideo(items) {
     v.title ||= i.title;
     v.channel ||= i.channel;
     v.tags = [...new Set([...v.tags, ...i.tags])].slice(0, LIMITS.tags);
-    v.marks.push({ t: i.t, note: i.note, author: i.author });
+    if (!i.videoOnly) v.marks.push({ t: i.t, note: i.note, author: i.author });
   }
   return videos;
 }
@@ -232,7 +240,7 @@ async function runImport() {
     go.disabled = false;
     return;
   }
-  toast(`已匯入 ${added} 個時間點`);
+  toast(`已匯入 ${videos.size} 部影片、${added} 個時間點`);
   items.forEach((i) => Object.assign(i, { status: "skip", message: "已匯入" }));
   renderPlan();
   setProgress(`完成：匯入 ${added} 個時間點、${videos.size} 部影片。`);
