@@ -214,6 +214,8 @@ function renderThread(m) {
   const id = esc(m.id);
   const comments = m.comments || [];
   const open = expanded.has(m.id);
+  // 列表保持乾淨：沒有補充、也沒展開時不顯示（新增補充的按鈕在滑鼠指到時才出現，手機在點選選單裡）
+  if (!comments.length && !open) return "";
   const label = comments.length ? `${comments.length} 則補充` : "補充或評論";
   return `<div class="thread">
     <button class="thread-toggle" data-toggle="${id}" aria-expanded="${open}">💬 ${label} ${open ? "▴" : "▾"}</button>
@@ -245,20 +247,20 @@ function renderMark(v, m) {
     </li>`;
   }
 
+  // 操作按鈕（電腦上滑鼠指到這一列才出現；手機上改由點選說明開啟的選單操作）
+  const addBtn = commentsEnabled() && !(m.comments || []).length && !expanded.has(m.id)
+    ? `<button class="btn ghost small" data-toggle="${id}" title="補充或評論">💬 補充</button>` : "";
   const editBtn = canEdit(m) ? `<button class="btn ghost small" data-edit-btn="${id}">編輯</button>` : "";
   const delBtn = !isAdmin() ? "" : confirmMarkId === m.id
     ? `<button class="btn ghost danger small" data-del="${id}">確定刪除？</button>`
     : `<button class="btn ghost small" data-askdel="${id}">刪除</button>`;
-  const actions = editBtn || delBtn ? `<div class="acts">${editBtn}${delBtn}</div>` : "<span></span>";
-  const byline = m.author || isMine(m)
-    ? `<span class="by">${m.author ? "— " + esc(m.author) : ""}${isMine(m) ? '<span class="mine">你新增的</span>' : ""}</span>`
-    : "";
+  const actions = addBtn || editBtn || delBtn ? `<div class="acts">${addBtn}${editBtn}${delBtn}</div>` : "<span></span>";
 
   return `<li class="mark" data-id="${id}">
     ${hasTime(m.t)
       ? `<a class="tc-chip" href="${esc(watchUrl(v.id, m.t))}" target="_blank" rel="noopener noreferrer" data-seek="${m.t}">${formatTime(m.t)}</a>`
       : '<span class="tc-chip no-time" title="沒有時間碼，是整部影片的說明">整部</span>'}
-    <div class="note">${esc(m.note) || '<span class="muted">（無說明）</span>'}${byline}</div>
+    <div class="note">${esc(m.note) || '<span class="muted">（無說明）</span>'}</div>
     ${actions}
     ${renderThread(m)}
   </li>`;
@@ -277,6 +279,7 @@ function renderMarks() {
   toggleAll.dataset.mode = allOpen ? "close" : "open";
 
   const list = $("#mark-list");
+  hidePop();
   if (!v.marks.length) {
     list.innerHTML = `<li class="empty">還沒有時間點。播放影片，按「記下目前時間」開始記錄。</li>`;
     return;
@@ -286,6 +289,113 @@ function renderMarks() {
   restoreDrafts(list, drafts);
   activeMarkId = undefined;
   highlightActiveMark(true);
+}
+
+/* ================= 浮動視窗：建立者資訊與手機操作選單 ================= */
+
+/** 電腦（有滑鼠）：指到時顯示建立者；手機（觸控）：點說明時顯示選單 */
+const canHover = matchMedia("(hover: hover) and (pointer: fine)");
+let popMarkId = null;  // 目前浮動視窗對應的時間點
+let popMode = null;    // "tip"：滑鼠提示；"menu"：手機選單
+
+function findMark(id) {
+  return currentVideo()?.marks.find((m) => m.id === id);
+}
+
+/** 建立者那一行 */
+function authorLine(m) {
+  const who = m.author ? `建立者：<b>${esc(m.author)}</b>` : '<span class="muted">沒有記錄建立者</span>';
+  return `<div class="pop-author">${who}${isMine(m) ? '<span class="mine">你新增的</span>' : ""}</div>`;
+}
+
+function hidePop() {
+  document.querySelectorAll("#mark-list .menu-open").forEach((li) => li.classList.remove("menu-open"));
+  const pop = $("#mark-pop");
+  pop.hidden = true;
+  pop.className = "mark-pop";
+  popMarkId = popMode = null;
+}
+
+/** 把浮動視窗放在 (x, y) 附近，不超出畫面 */
+function placePop(x, y) {
+  const pop = $("#mark-pop");
+  const pad = 8;
+  const w = pop.offsetWidth;
+  const h = pop.offsetHeight;
+  const left = Math.min(Math.max(pad, x), window.innerWidth - w - pad);
+  let top = y;
+  if (top + h > window.innerHeight - pad) top = Math.max(pad, y - h - 28); // 下面放不下就放上面
+  pop.style.left = left + "px";
+  pop.style.top = top + "px";
+}
+
+/** 電腦：滑鼠在時間點上移動時，在游標旁顯示建立者 */
+function onListPointerMove(e) {
+  if (!canHover.matches || popMode === "menu") return;
+  const li = e.target.closest(".mark");
+  // 補充區有自己的建立者，指到補充區時不顯示
+  if (!li || li.classList.contains("editing") || e.target.closest(".thread-body")) { if (popMode === "tip") hidePop(); return; }
+  const m = findMark(li.dataset.id);
+  if (!m) return;
+  const pop = $("#mark-pop");
+  if (popMarkId !== m.id || popMode !== "tip") {
+    pop.innerHTML = authorLine(m);
+    pop.className = "mark-pop tip";
+    pop.hidden = false;
+    popMarkId = m.id;
+    popMode = "tip";
+  }
+  placePop(e.clientX + 14, e.clientY + 18);
+}
+
+/** 手機選單的內容 */
+function renderMenu(m) {
+  const id = esc(m.id);
+  const buttons = [];
+  if (commentsEnabled()) {
+    const n = (m.comments || []).length;
+    buttons.push(`<button type="button" class="btn sm" data-toggle="${id}">💬 ${expanded.has(m.id) ? "收起補充" : n ? `看 ${n} 則補充` : "補充或評論"}</button>`);
+  }
+  if (canEdit(m)) buttons.push(`<button type="button" class="btn sm" data-edit-btn="${id}">編輯</button>`);
+  if (isAdmin()) {
+    buttons.push(confirmMarkId === m.id
+      ? `<button type="button" class="btn sm danger-solid" data-del="${id}">確定刪除？</button>`
+      : `<button type="button" class="btn sm danger-outline" data-askdel="${id}">刪除</button>`);
+  }
+  return authorLine(m) + (buttons.length ? `<div class="pop-actions">${buttons.join("")}</div>` : "");
+}
+
+/** 手機：點時間點的說明，在下方開啟選單（再點一次關閉） */
+function openMenu(li) {
+  const m = findMark(li.dataset.id);
+  if (!m) return;
+  const same = popMode === "menu" && popMarkId === m.id;
+  hidePop();
+  if (same) return; // 再點一次同一個：關閉
+  confirmMarkId = null;
+  const pop = $("#mark-pop");
+  pop.innerHTML = renderMenu(m);
+  pop.className = "mark-pop menu";
+  pop.hidden = false;
+  popMarkId = m.id;
+  popMode = "menu";
+  li.classList.add("menu-open");
+  const box = li.querySelector(".note").getBoundingClientRect();
+  placePop(box.left, box.bottom + 6);
+}
+
+async function onPopClick(e) {
+  if (popMode !== "menu") return;
+  const askDel = e.target.closest("[data-askdel]");
+  if (askDel) { // 兩段式確認：只更新選單，不重畫列表
+    confirmMarkId = popMarkId;
+    const m = findMark(popMarkId);
+    if (m) $("#mark-pop").innerHTML = renderMenu(m);
+    return;
+  }
+  if (!e.target.closest("button")) return;
+  hidePop();
+  await onListClick(e);
 }
 
 /* ================= 事件處理 ================= */
@@ -298,6 +408,12 @@ async function onListClick(e) {
 
   const seek = pick("data-seek");
   if (seek && isPlayerReady()) { e.preventDefault(); jumpTo(Number(seek.dataset.seek)); return; }
+
+  // 手機：點說明開啟選單（建立者、補充、編輯、刪除）
+  if (!canHover.matches && target.closest(".mark .note") && !target.closest(".editing")) {
+    openMenu(target.closest(".mark"));
+    return;
+  }
 
   const toggle = pick("data-toggle");
   if (toggle) {
@@ -439,6 +555,15 @@ function bindDeleteVideo() {
 
 export function initVideo() {
   $("#mark-list").addEventListener("click", onListClick);
+  $("#mark-list").addEventListener("pointermove", onListPointerMove);
+  $("#mark-list").addEventListener("pointerleave", () => { if (popMode === "tip") hidePop(); });
+  $("#mark-pop").addEventListener("click", onPopClick);
+  // 點選單以外的地方、捲動或換頁時關閉選單
+  document.addEventListener("pointerdown", (e) => {
+    if (popMode === "menu" && !e.target.closest("#mark-pop") && !e.target.closest(".mark .note")) hidePop();
+  });
+  window.addEventListener("scroll", () => { if (popMode) hidePop(); }, { passive: true });
+  window.addEventListener("resize", () => { if (popMode) hidePop(); });
   $("#mark-list").addEventListener("submit", onListSubmit);
   $("#quick-form").addEventListener("submit", onQuickAdd);
   $("#back-btn").addEventListener("click", () => show(nav.previous === "video" ? "library" : nav.previous));
@@ -466,7 +591,7 @@ export function initVideo() {
   setInterval(() => highlightActiveMark(false), 500);
 
   registerView("video", {
-    onHide: pausePlayer,
+    onHide() { pausePlayer(); hidePop(); },
     onData() {
       if (!currentVideo()) {
         if (state.loaded) { toast("這部影片已被刪除"); show("library"); }

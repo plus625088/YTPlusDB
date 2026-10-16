@@ -1707,3 +1707,77 @@ body:has(#view-library.bulk-mode:not([hidden])) .toast {
   font-size:18px;
   margin:0 0 4px;
 }
+
+/* ---------- 時間點列表：只顯示時間與說明 ---------- */
+/* 電腦（有滑鼠）：操作按鈕指到這一列才出現 */
+@media (hover: hover) and (pointer: fine) {
+  .mark .acts {
+    opacity:0;
+    transition:opacity .12s;
+  }
+
+  .mark:hover .acts,
+  .mark:focus-within .acts {
+    opacity:1;
+  }
+}
+
+/* 手機（觸控）：不顯示操作按鈕，點說明開啟選單 */
+@media (hover: none), (pointer: coarse) {
+  .mark .acts {
+    display:none;
+  }
+
+  .mark .note {
+    cursor:pointer;
+    border-radius:6px;
+  }
+
+  .mark.menu-open .note {
+    background:var(--surface-2);
+    box-shadow:0 0 0 4px var(--surface-2);
+  }
+}
+
+/* 浮動視窗 */
+.mark-pop {
+  position:fixed;
+  z-index:60;
+  max-width:min(320px, calc(100vw - 16px));
+  background:var(--fg);
+  color:var(--bg);
+  border-radius:8px;
+  padding:6px 10px;
+  font-size:13px;
+  box-shadow:0 6px 20px rgba(0,0,0,.25);
+}
+
+.mark-pop.tip {
+  pointer-events:none;
+}
+
+.mark-pop .mine {
+  background:color-mix(in srgb,var(--bg) 20%,transparent);
+  color:var(--bg);
+}
+
+.mark-pop.menu {
+  background:var(--surface);
+  color:var(--fg);
+  border:1px solid var(--line);
+  padding:10px 12px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.mark-pop.menu .mine {
+  background:var(--tc-bg);
+  color:var(--tc-fg);
+}
+
+.pop-actions {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
