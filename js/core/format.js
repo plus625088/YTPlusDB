@@ -116,7 +116,7 @@ export function memberTagFor(title) {
 }
 
 /**
- * 影片還沒有「會員」或「非會員」標籤時，依標題自動加上。
+ * 影片還沒有「會員」或「公開」標籤時，依標題自動加上。
  * 已經有其中一個（例如手動改過）就不更動。回傳新的陣列。
  */
 export function withMemberTag(tags, title) {

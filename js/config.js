@@ -46,7 +46,9 @@ export const PENDING_TAG = "待補";
  */
 export const MEMBER_KEYWORD = "會員專屬";
 export const MEMBER_TAG = "會員";
-export const NON_MEMBER_TAG = "非會員";
+export const NON_MEMBER_TAG = "公開";
+/** 以前用過的標籤名稱：管理者開啟網站時，會自動把舊名稱改成新名稱 */
+export const RENAMED_TAGS = { "非會員": NON_MEMBER_TAG };
 
 /** 各欄位的長度上限（要和 firestore.rules 一致） */
 export const LIMITS = {

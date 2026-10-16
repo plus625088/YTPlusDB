@@ -72,7 +72,7 @@ function updateMemberHint() {
   } else {
     hint.textContent = tag
       ? `會自動加上 #${tag} 標籤。`
-      : "標題含有「會員專屬」會自動加上 #會員，否則加上 #非會員。";
+      : `標題含有「會員專屬」會自動加上 #會員，否則加上 #${NON_MEMBER_TAG}。`;
   }
 }
 

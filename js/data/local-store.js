@@ -35,7 +35,7 @@ export function createLocalStore() {
 
   /** 依有無時間點更新「待補」標籤 */
   const syncPending = (v) => { v.tags = withPendingTag(v.tags, v.marks.length > 0); };
-  /** 依標題補上「會員／非會員」標籤 */
+  /** 依標題補上「會員／公開」標籤 */
   const syncMember = (v) => { v.tags = withMemberTag(v.tags, v.title); };
 
   /** 存回瀏覽器並通知畫面 */

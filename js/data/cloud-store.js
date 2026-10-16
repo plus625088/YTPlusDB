@@ -210,7 +210,7 @@ export async function createCloudStore() {
       if (!old) return;
       const changes = {};
       for (const key in patch) if (!old[key] && patch[key]) changes[key] = patch[key];
-      // 剛補上標題時，順便依標題加上「會員／非會員」標籤
+      // 剛補上標題時，順便依標題加上「會員／公開」標籤
       const oldTags = old.tags || [];
       if (changes.title && !oldTags.includes(MEMBER_TAG) && !oldTags.includes(NON_MEMBER_TAG)) {
         changes.tags = arrayUnion(memberTagFor(changes.title));
