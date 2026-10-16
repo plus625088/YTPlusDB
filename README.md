@@ -43,6 +43,7 @@
 
 - 標題、頻道的規則只在**新增影片**或**第一次抓到標題**時套用；要讓現有影片也套用，用設定頁的「套用到現有影片」。
 - 自動標籤顯示為**藍色**（待補為紅色），手動加的標籤為灰色。
+- 標籤排序：自動標籤排在最前面（依「標籤規則」頁的規則順序，待補排在規則標籤之後），手動加的標籤接在後面依筆畫排序。影片頁、首頁卡片、搜尋結果都用這個順序。
 - 在設定頁修改規則的標籤名稱時，現有影片上的舊標籤會一起改名。
 
 ## 檔案結構
@@ -52,6 +53,7 @@ index.html              頁面結構（只有 HTML，沒有程式）
 css/style.css           所有樣式
 template.xlsx           批次匯入用的 Excel 範本
 firestore.rules         Firebase 資料庫的安全規則（要貼到 Firebase 控制台）
+CLAUDE.md               給 Claude 的工作準則（例如修改時要同步更新 README）
 js/
   config.js             ★ 設定：Firebase、管理者帳號、YouTube API 金鑰
   main.js               進入點：啟動網站、串接各模組
@@ -60,7 +62,7 @@ js/
     format.js           解析與格式化：YouTube 網址、時間碼、日期、Hashtag
     state.js            全站共用狀態、權限判斷、記住使用者名字
     router.js           分頁切換
-    autotag.js          自動標籤規則的判斷（預設規則也在這裡）
+    autotag.js          自動標籤規則的判斷、標籤排序（預設規則也在這裡）
   data/
     cloud-store.js      雲端模式：Firebase Firestore 讀寫、登入
     local-store.js      單機模式：資料存在瀏覽器

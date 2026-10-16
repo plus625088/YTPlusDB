@@ -89,8 +89,22 @@ export function withPendingTag(tags, hasMarks) {
   return hasMarks ? rest : [...rest, p].slice(-LIMITS.tags);
 }
 
-/** 標籤依名稱排序（中文依筆畫／注音的系統排序） */
-export const sortTags = (tags) => [...(tags || [])].sort((a, b) => a.localeCompare(b, "zh-Hant"));
+/** 依筆畫排序用的比較器（繁體中文筆畫順序） */
+const byStroke = new Intl.Collator("zh-Hant-TW-u-co-stroke").compare;
+
+/**
+ * 標籤排序：自動標籤排在最前面（依「標籤規則」頁的規則順序，「待補」排在規則標籤之後），
+ * 其餘手動加的標籤依筆畫排序。
+ */
+export function sortTags(tags) {
+  const settings = getSettings();
+  const autoOrder = [...new Set(settings.rules.map((r) => r.tag))];
+  if (settings.pending.enabled && settings.pending.tag && !autoOrder.includes(settings.pending.tag)) autoOrder.push(settings.pending.tag);
+  const list = [...new Set(tags || [])];
+  const auto = autoOrder.filter((t) => list.includes(t));
+  const manual = list.filter((t) => !autoOrder.includes(t)).sort(byStroke);
+  return [...auto, ...manual];
+}
 
 /** 標籤的 CSS class：自動標籤用不同顏色，「待補」用紅色 */
 export const tagClass = (tag) => "tag" + (isPendingTag(tag) ? " pending" : isAutoTag(tag) ? " auto" : "");
