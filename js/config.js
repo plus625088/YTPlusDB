@@ -40,6 +40,14 @@ export const CLOUD = Boolean(FIREBASE_CONFIG.projectId);
  */
 export const PENDING_TAG = "待補";
 
+/**
+ * 會員影片：新增影片時，標題含有 MEMBER_KEYWORD 就自動加上 MEMBER_TAG，否則加上 NON_MEMBER_TAG。
+ * 已經有其中一個標籤的影片不會再更動（可以手動修改）。
+ */
+export const MEMBER_KEYWORD = "會員專屬";
+export const MEMBER_TAG = "會員";
+export const NON_MEMBER_TAG = "非會員";
+
 /** 各欄位的長度上限（要和 firestore.rules 一致） */
 export const LIMITS = {
   title: 200,

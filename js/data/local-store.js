@@ -4,7 +4,7 @@
  */
 import { makeId, storageGet, storageSet } from "../core/dom.js";
 import { state, emitChange } from "../core/state.js";
-import { isVideoId, withPendingTag } from "../core/format.js";
+import { isVideoId, withPendingTag, withMemberTag } from "../core/format.js";
 import { sampleData } from "./seed.js";
 
 const STORAGE_KEY = "yt-timecode-notes.v1";
@@ -35,6 +35,8 @@ export function createLocalStore() {
 
   /** 依有無時間點更新「待補」標籤 */
   const syncPending = (v) => { v.tags = withPendingTag(v.tags, v.marks.length > 0); };
+  /** 依標題補上「會員／非會員」標籤 */
+  const syncMember = (v) => { v.tags = withMemberTag(v.tags, v.title); };
 
   /** 存回瀏覽器並通知畫面 */
   function save() {
@@ -64,6 +66,7 @@ export function createLocalStore() {
         v.tags = [...new Set([...(v.tags || []), ...tags])];
       }
       for (const m of marks) v.marks.push({ id: makeId(), t: m.t, note: m.note, author, comments: [] });
+      syncMember(v);
       syncPending(v);
       v.updatedAt = Date.now();
       save();
@@ -81,7 +84,7 @@ export function createLocalStore() {
       for (const key in patch) {
         if (!v[key] && patch[key]) { v[key] = patch[key]; changed = true; }
       }
-      if (changed) save();
+      if (changed) { syncMember(v); save(); }
     },
 
     async deleteVideo(id) {
@@ -160,6 +163,7 @@ export function createLocalStore() {
           });
           added++;
         }
+        syncMember(v);
         syncPending(v);
       }
       save();

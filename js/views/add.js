@@ -4,7 +4,8 @@
 import { LIMITS } from "../config.js";
 import { $, run } from "../core/dom.js";
 import { state, getVideo, getName, setName } from "../core/state.js";
-import { parseVideoId, parseUrlTime, parseTime, formatTime, parseTags, tagsToText } from "../core/format.js";
+import { parseVideoId, parseUrlTime, parseTime, formatTime, parseTags, tagsToText, memberTagFor } from "../core/format.js";
+import { MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
 import { registerView, nav } from "../core/router.js";
 import { fetchVideoMeta } from "../youtube/meta.js";
 import { openVideo } from "./video.js";
@@ -57,6 +58,21 @@ function setMetaFields(title, channel, locked, placeholder) {
     el.readOnly = locked;
     el.placeholder = placeholder;
     $(lockSel).textContent = locked ? "🔒 自動帶入" : "（抓不到，請手動輸入）";
+  }
+  updateMemberHint();
+}
+
+/** 顯示這部影片會被加上哪個會員標籤 */
+function updateMemberHint() {
+  const hint = $("#member-hint");
+  const existing = getVideo(parseVideoId($("#add-url").value));
+  const tag = memberTagFor($("#add-title").value.trim());
+  if (existing && (existing.tags.includes(MEMBER_TAG) || existing.tags.includes(NON_MEMBER_TAG))) {
+    hint.textContent = `這部影片已標記為 #${existing.tags.includes(MEMBER_TAG) ? MEMBER_TAG : NON_MEMBER_TAG}。`;
+  } else {
+    hint.textContent = tag
+      ? `會自動加上 #${tag} 標籤。`
+      : "標題含有「會員專屬」會自動加上 #會員，否則加上 #非會員。";
   }
 }
 
@@ -156,6 +172,7 @@ async function onSubmit(e) {
 export function initAdd() {
   let urlTimer;
   $("#add-url").addEventListener("input", () => { clearTimeout(urlTimer); urlTimer = setTimeout(onUrlChange, 250); });
+  $("#add-title").addEventListener("input", updateMemberHint);
   $("#add-entry").addEventListener("click", () => addEntryRow().querySelector("input").focus());
   $("#entries").addEventListener("click", onEntriesClick);
   $("#add-form").addEventListener("submit", onSubmit);

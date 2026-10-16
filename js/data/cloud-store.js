@@ -16,7 +16,8 @@
 import { FIREBASE_CONFIG, FIREBASE_SDK_VERSION, LIMITS } from "../config.js";
 import { toast } from "../core/dom.js";
 import { state, emitChange, isAdmin } from "../core/state.js";
-import { isVideoId, hasTime, withPendingTag, sameTags } from "../core/format.js";
+import { isVideoId, hasTime, withPendingTag, withMemberTag, memberTagFor, sameTags } from "../core/format.js";
+import { MEMBER_TAG, NON_MEMBER_TAG } from "../config.js";
 import { PENDING_TAG } from "../config.js";
 
 /** Firestore 自動產生的文件 ID 一律是 20 碼英數 */
@@ -179,14 +180,15 @@ export async function createCloudStore() {
       const old = raw.videos.get(id);
       if (!old) {
         batch.set(videoRef(id), {
-          title, channel, tags: withPendingTag(tags, marks.length > 0), createdBy: author,
+          title, channel, tags: withPendingTag(withMemberTag(tags, title), marks.length > 0), createdBy: author,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
       } else {
         const patch = { updatedAt: serverTimestamp() };
         // 合併 Hashtag，並依有無時間點加上或移除「待補」
         const oldTags = old.tags || [];
-        const newTags = withPendingTag([...new Set([...oldTags, ...tags])], marks.length > 0 || videoHasMarks(id));
+        const merged = withMemberTag([...new Set([...oldTags, ...tags])], old.title || title);
+        const newTags = withPendingTag(merged, marks.length > 0 || videoHasMarks(id));
         if (!sameTags(oldTags, newTags)) patch.tags = newTags;
         // 一般人只能補上原本空白的標題、頻道；管理者可以覆蓋
         if (title && (isAdmin() || !old.title)) patch.title = title;
@@ -208,6 +210,11 @@ export async function createCloudStore() {
       if (!old) return;
       const changes = {};
       for (const key in patch) if (!old[key] && patch[key]) changes[key] = patch[key];
+      // 剛補上標題時，順便依標題加上「會員／非會員」標籤
+      const oldTags = old.tags || [];
+      if (changes.title && !oldTags.includes(MEMBER_TAG) && !oldTags.includes(NON_MEMBER_TAG)) {
+        changes.tags = arrayUnion(memberTagFor(changes.title));
+      }
       if (Object.keys(changes).length) await updateDoc(videoRef(id), changes);
     },
 
@@ -285,14 +292,15 @@ export async function createCloudStore() {
 
         if (!old) {
           batch.set(videoRef(nv.id), {
-            title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(nv.tags || [], hasMarks), createdBy: "匯入",
+            title: nv.title || "", channel: nv.channel || "", tags: withPendingTag(withMemberTag(nv.tags || [], nv.title), hasMarks), createdBy: "匯入",
             createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
           });
           count++;
         } else {
           const patch = {};
           const oldTags = old.tags || [];
-          const newTags = withPendingTag([...new Set([...oldTags, ...(nv.tags || [])])], hasMarks);
+          const merged = withMemberTag([...new Set([...oldTags, ...(nv.tags || [])])], old.title || nv.title);
+          const newTags = withPendingTag(merged, hasMarks);
           if (!sameTags(oldTags, newTags)) patch.tags = newTags;
           if (!old.title && nv.title) patch.title = nv.title;
           if (!old.channel && nv.channel) patch.channel = nv.channel;
