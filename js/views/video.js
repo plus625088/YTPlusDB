@@ -111,6 +111,7 @@ function renderMeta(force) {
     el.readOnly = !admin;
     if (force || document.activeElement !== el) el.value = value; // 不要蓋掉正在輸入的內容
   }
+  fitTitle();
   $("#channel-input").placeholder = admin ? "頻道名稱" : "—";
   renderTagEditor(v, admin);
   $("#sample-chip").hidden = !v.sample;
@@ -122,6 +123,13 @@ function renderMeta(force) {
   $("#del-confirm-text").textContent =
     `「${v.title || "未命名影片"}」和它的 ${v.marks.length} 個時間點（包含其他人新增的）都會被刪除` +
     `${CLOUD ? "，所有人都看不到" : ""}，而且無法復原。`;
+}
+
+/** 標題欄依內容自動長高，長標題可以完整顯示 */
+function fitTitle() {
+  const el = $("#title-input");
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + (el.offsetHeight - el.clientHeight) + "px"; // 加上框線高度
 }
 
 /* ================= Hashtag 標籤 ================= */
@@ -399,7 +407,12 @@ async function onQuickAdd(e) {
 /** 管理者修改標題、頻道、Hashtag（Hashtag 的處理在上方「Hashtag 標籤」） */
 function bindMetaEditing() {
   const update = (patch, message) => { if (isAdmin()) run(() => state.store.updateVideo(currentId, patch), message); };
-  $("#title-input").addEventListener("change", (e) => update({ title: e.target.value.trim().slice(0, LIMITS.title) }, "已更新標題"));
+  const title = $("#title-input");
+  title.addEventListener("change", (e) => update({ title: e.target.value.replace(/\s*\n\s*/g, " ").trim().slice(0, LIMITS.title) }, "已更新標題"));
+  title.addEventListener("input", fitTitle);
+  // 標題只有一行：按 Enter 等於完成編輯
+  title.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); title.blur(); } });
+  new ResizeObserver(fitTitle).observe(title);
   $("#channel-input").addEventListener("change", (e) => update({ channel: e.target.value.trim().slice(0, LIMITS.channel) }, "已更新頻道"));
   $("#tag-add-input").addEventListener("keydown", onTagInputKey);
   $("#tag-chips").addEventListener("click", onTagChipClick);

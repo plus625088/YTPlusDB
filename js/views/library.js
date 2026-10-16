@@ -19,6 +19,9 @@ let matchMode = "all";       // "all"：要有全部選取的標籤；"any"：�
 let tagsOpen = false;        // 篩選面板預設收起
 let manageOpen = false;      // 管理者的改名區塊
 let confirmMerge = null;     // 等待確認合併的標籤
+let bulkMode = false;        // 管理者：批次編輯 Hashtag
+const picked = new Set();    // 批次編輯時選取的影片
+let shownIds = [];           // 目前列出的影片（全選用）
 
 const tagClass = (t) => "tag" + (t === PENDING_TAG ? " pending" : "");
 
@@ -141,7 +144,9 @@ function renderCard(v) {
   const byline = [v.channel && esc(v.channel), v.publishedAt && formatDate(v.publishedAt)].filter(Boolean).join(" · ");
   const tags = (v.tags || []).map((t) => `<span class="${tagClass(t)}" data-filter="${esc(t)}" aria-pressed="${selected.has(t)}" title="加入篩選">#${esc(t)}</span>`).join("");
 
-  return `<button class="card" data-open="${id}">
+  const isPicked = bulkMode && picked.has(v.id);
+  return `<button class="card${bulkMode ? " selectable" : ""}${isPicked ? " picked" : ""}" data-open="${id}"${bulkMode ? ` aria-pressed="${isPicked}"` : ""}>
+    ${bulkMode ? `<span class="pick" aria-hidden="true">${isPicked ? "✓" : ""}</span>` : ""}
     <div class="thumb">
       <span class="ph">${id}</span>
       <img src="https://i.ytimg.com/vi/${id}/mqdefault.jpg" alt="" loading="lazy">
@@ -167,11 +172,17 @@ function render() {
   }
 
   renderTagBar();
+  if (bulkMode && !isAdmin()) bulkMode = false;
+  $("#bulk-btn").hidden = !isAdmin();
+  $("#bulk-btn").setAttribute("aria-pressed", String(bulkMode));
   const mode = $("#sort-sel").value;
   const videos = state.db.videos
     .filter(matchesFilter)
     .sort((a, b) => compareVideos(a, b, mode));
 
+  shownIds = videos.map((v) => v.id);
+  for (const id of picked) if (!state.db.videos.some((v) => v.id === id)) picked.delete(id); // 已刪除的影片
+  renderBulkBar();
   const markCount = videos.reduce((n, v) => n + v.marks.length, 0);
   $("#lib-stats").textContent = videos.length
     ? (selected.size ? `${[...selected].map((t) => "#" + t).join(" ")}：` : "") + `${videos.length} 部影片 · ${markCount} 個時間點`
@@ -185,6 +196,47 @@ function render() {
 
   // 縮圖載入失敗就移除，露出底下的影片 ID
   grid.querySelectorAll(".thumb img").forEach((img) => img.addEventListener("error", () => img.remove(), { once: true }));
+}
+
+/* ---------- 批次編輯 Hashtag（管理者） ---------- */
+
+function setBulkMode(on) {
+  bulkMode = on;
+  if (!on) picked.clear();
+  render();
+  if (on) toast("點影片來選取，再用下方工具列加入或移除 Hashtag");
+}
+
+function renderBulkBar() {
+  const bar = $("#bulk-bar");
+  bar.hidden = !bulkMode;
+  $("#view-library").classList.toggle("bulk-mode", bulkMode);
+  if (!bulkMode) return;
+
+  const videos = state.db.videos.filter((v) => picked.has(v.id));
+  $("#bulk-count").textContent = `已選 ${picked.size} 部`;
+  $("#bulk-none").hidden = !picked.size;
+
+  // 選取的影片目前有哪些 Hashtag（數字是幾部有），按 × 從所有選取的影片移除
+  const counts = {};
+  for (const v of videos) for (const t of v.tags || []) counts[t] = (counts[t] || 0) + 1;
+  const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  $("#bulk-tags").innerHTML = !picked.size
+    ? '<span class="small muted">先點選要編輯的影片。</span>'
+    : !names.length
+      ? '<span class="small muted">選取的影片都還沒有 Hashtag。</span>'
+      : '<span class="small muted">從選取的影片移除：</span>' + names.map((t) => `<span class="${tagClass(t)} tag-chip">#${esc(t)} <span class="muted">${counts[t]}/${picked.size}</span><button type="button" class="tag-x" data-bulk-remove="${esc(t)}" aria-label="從選取的影片移除 #${esc(t)}" title="從選取的影片移除">×</button></span>`).join("");
+
+  const used = new Set(state.db.videos.flatMap((v) => v.tags || []));
+  $("#bulk-suggest").innerHTML = [...used].sort().map((t) => `<option value="${esc(t)}">`).join("");
+  $("#bulk-add-form").querySelectorAll("input,button").forEach((el) => { el.disabled = !picked.size; });
+}
+
+async function bulkApply(change, message) {
+  if (!isAdmin() || !picked.size) return;
+  let count = 0;
+  const ok = await run(async () => { count = await state.store.bulkUpdateTags([...picked], change); });
+  if (ok) toast(count ? message(count) : "選取的影片都不需要變更");
 }
 
 export function initLibrary() {
@@ -228,8 +280,42 @@ export function initLibrary() {
     const tag = e.target.closest("[data-filter]");
     if (tag) { e.stopPropagation(); toggleTag(tag.dataset.filter); return; }
     const card = e.target.closest("[data-open]");
-    if (card) openVideo(card.dataset.open);
+    if (!card) return;
+    if (bulkMode) {
+      const id = card.dataset.open;
+      if (picked.has(id)) picked.delete(id); else picked.add(id);
+      render();
+      return;
+    }
+    openVideo(card.dataset.open);
   });
 
-  registerView("library", { onShow: render, onData: render });
+  // 批次編輯 Hashtag
+  // 記錄工具列高度，讓提示訊息顯示在工具列上方
+  new ResizeObserver(([entry]) => document.documentElement.style.setProperty("--bulk-h", entry.target.offsetHeight + "px")).observe($("#bulk-bar"));
+  $("#bulk-btn").addEventListener("click", () => setBulkMode(!bulkMode));
+  $("#bulk-done").addEventListener("click", () => setBulkMode(false));
+  $("#bulk-all").addEventListener("click", () => { shownIds.forEach((id) => picked.add(id)); render(); });
+  $("#bulk-none").addEventListener("click", () => { picked.clear(); render(); });
+  $("#bulk-tags").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-bulk-remove]");
+    if (!btn) return;
+    const tag = btn.dataset.bulkRemove;
+    bulkApply({ remove: [tag] }, (n) => `已從 ${n} 部影片移除 #${tag}`);
+  });
+  $("#bulk-add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const input = $("#bulk-add-input");
+    const tags = parseTags(input.value);
+    if (!tags.length) { toast("請輸入要加入的 Hashtag"); input.focus(); return; }
+    input.value = "";
+    await bulkApply({ add: tags }, (n) => `已替 ${n} 部影片加入 ${tags.map((t) => "#" + t).join(" ")}`);
+    input.focus();
+  });
+
+  registerView("library", {
+    onShow: render,
+    onData: render,
+    onHide() { if (bulkMode) { bulkMode = false; picked.clear(); $("#bulk-bar").hidden = true; $("#view-library").classList.remove("bulk-mode"); } },
+  });
 }

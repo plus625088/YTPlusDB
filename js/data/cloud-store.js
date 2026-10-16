@@ -218,6 +218,20 @@ export async function createCloudStore() {
       if (Object.keys(changes).length) await updateDoc(videoRef(id), changes);
     },
 
+    /** 批次替多部影片加入／移除 Hashtag（只有管理者能用），回傳實際有變動的影片數 */
+    async bulkUpdateTags(ids, { add = [], remove = [] }) {
+      const changes = [];
+      for (const id of ids) {
+        const v = raw.videos.get(id);
+        if (!v) continue;
+        const old = v.tags || [];
+        const next = [...new Set([...old.filter((t) => !remove.includes(t)), ...add])].slice(0, LIMITS.tags);
+        if (!sameTags(old, next)) changes.push((b) => b.update(videoRef(id), { tags: next }));
+      }
+      await commitInChunks(changes);
+      return changes.length;
+    },
+
     /** 把所有影片的 Hashtag「oldName」改成「newName」（新名稱已存在時等於合併；只有管理者能用） */
     async renameTag(oldName, newName) {
       const targets = [...raw.videos].filter(([, v]) => (v.tags || []).includes(oldName));

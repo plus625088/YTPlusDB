@@ -87,6 +87,20 @@ export function createLocalStore() {
       if (changed) { syncMember(v); save(); }
     },
 
+    /** 批次替多部影片加入／移除 Hashtag，回傳實際有變動的影片數 */
+    async bulkUpdateTags(ids, { add = [], remove = [] }) {
+      let count = 0;
+      for (const v of data.videos) {
+        if (!ids.includes(v.id)) continue;
+        const next = [...new Set([...(v.tags || []).filter((t) => !remove.includes(t)), ...add])];
+        if (next.length === (v.tags || []).length && next.every((t) => v.tags.includes(t))) continue;
+        v.tags = next;
+        count++;
+      }
+      save();
+      return count;
+    },
+
     /** 把所有影片的 Hashtag「oldName」改成「newName」（新名稱已存在時等於合併） */
     async renameTag(oldName, newName) {
       let count = 0;

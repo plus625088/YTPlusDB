@@ -42,6 +42,7 @@
       <div><h1>影片</h1><div class="muted small" id="lib-stats"></div></div>
       <div class="row" style="margin-left:auto;gap:8px"><label for="sort-sel" class="small muted">排序</label>
         <select id="sort-sel"><option value="published">發布時間（新→舊）</option><option value="published-asc">發布時間（舊→新）</option><option value="updated">最近更新</option></select></div>
+      <button class="btn" id="bulk-btn" hidden>☑ 批次編輯 Hashtag</button>
       <button class="btn primary" data-nav="add">＋ 新增紀錄</button>
     </div>
     <div class="tag-toggle-row" id="tag-toggle-row" hidden>
@@ -64,6 +65,24 @@
       <div class="tag-manage" id="tag-manage" hidden></div>
     </div>
     <div class="grid" id="lib-grid"></div>
+
+    <!-- 管理者：批次增減 Hashtag。選取影片後，下方工具列可以一次加入或移除標籤 -->
+    <div class="bulk-bar" id="bulk-bar" hidden>
+      <div class="wrap bulk-inner">
+        <div class="row bulk-top">
+          <strong id="bulk-count">已選 0 部</strong>
+          <button type="button" class="linkbtn" id="bulk-all">全選目前列出的影片</button>
+          <button type="button" class="linkbtn" id="bulk-none">取消選取</button>
+          <button type="button" class="btn sm" id="bulk-done">完成</button>
+        </div>
+        <div class="bulk-tags" id="bulk-tags"></div>
+        <form class="row bulk-add" id="bulk-add-form">
+          <input type="text" id="bulk-add-input" list="bulk-suggest" maxlength="80" placeholder="要加入的 Hashtag（可一次輸入多個）" autocomplete="off">
+          <datalist id="bulk-suggest"></datalist>
+          <button type="submit" class="btn primary sm">加入到選取的影片</button>
+        </form>
+      </div>
+    </div>
   </section>
 
   <!-- 單一影片 -->
@@ -82,7 +101,7 @@
         </div>
       </div>
       <div class="vid-title area-title">
-        <input type="text" id="title-input" aria-label="影片標題" placeholder="未命名影片">
+        <textarea id="title-input" rows="1" maxlength="200" aria-label="影片標題" placeholder="未命名影片"></textarea>
         <span class="chip" id="sample-chip" hidden>範例</span>
       </div>
       <div class="area-info">
