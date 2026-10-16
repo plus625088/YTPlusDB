@@ -87,6 +87,18 @@ export function createLocalStore() {
       if (changed) { syncMember(v); save(); }
     },
 
+    /** 把所有影片的 Hashtag「oldName」改成「newName」（新名稱已存在時等於合併） */
+    async renameTag(oldName, newName) {
+      let count = 0;
+      for (const v of data.videos) {
+        if (!(v.tags || []).includes(oldName)) continue;
+        v.tags = [...new Set(v.tags.map((t) => (t === oldName ? newName : t)))];
+        count++;
+      }
+      save();
+      return count;
+    },
+
     async deleteVideo(id) {
       data.videos = data.videos.filter((v) => v.id !== id);
       save();

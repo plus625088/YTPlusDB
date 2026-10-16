@@ -1256,3 +1256,83 @@ details.panel summary {
   background:var(--danger);
   color:#fff;
 }
+
+/* ---------- Hashtag 篩選面板 ---------- */
+.tag-panel {
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--r);
+  padding:12px 14px;
+  margin-bottom:16px;
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+}
+
+.tag-panel .tagbar {
+  margin-bottom:0;
+}
+
+.tag-tools {
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  align-items:center;
+}
+
+.tag-tools #tag-manage-btn {
+  margin-left:auto;
+}
+
+.seg {
+  display:inline-flex;
+  background:var(--surface-2);
+  border-radius:999px;
+  padding:3px;
+}
+
+.seg button {
+  border:0;
+  background:transparent;
+  padding:3px 10px;
+  border-radius:999px;
+  font-size:13px;
+  cursor:pointer;
+  color:var(--muted);
+}
+
+.seg button[aria-pressed="true"] {
+  background:var(--surface);
+  color:var(--fg);
+  box-shadow:0 1px 2px rgba(0,0,0,.12);
+}
+
+/* 管理者：統一改名 */
+.tag-manage {
+  border-top:1px solid var(--line);
+  padding-top:12px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.tag-manage-row {
+  display:grid;
+  grid-template-columns:minmax(0,180px) minmax(0,1fr) auto;
+  gap:8px;
+  align-items:center;
+}
+
+.tag-manage-row input {
+  padding:6px 10px;
+}
+
+@media (max-width:560px) {
+  .tag-manage-row {
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+
+  .tag-manage-row .tm-name {
+    grid-column:1 / -1;
+  }
+}

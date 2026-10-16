@@ -218,6 +218,15 @@ export async function createCloudStore() {
       if (Object.keys(changes).length) await updateDoc(videoRef(id), changes);
     },
 
+    /** 把所有影片的 Hashtag「oldName」改成「newName」（新名稱已存在時等於合併；只有管理者能用） */
+    async renameTag(oldName, newName) {
+      const targets = [...raw.videos].filter(([, v]) => (v.tags || []).includes(oldName));
+      await commitInChunks(targets.map(([id, v]) => (b) => b.update(videoRef(id), {
+        tags: [...new Set(v.tags.map((t) => (t === oldName ? newName : t)))],
+      })));
+      return targets.length;
+    },
+
     /** 刪除影片，連同它的所有時間點和補充 */
     async deleteVideo(id) {
       const refs = [

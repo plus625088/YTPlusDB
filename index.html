@@ -45,10 +45,24 @@
       <button class="btn primary" data-nav="add">＋ 新增紀錄</button>
     </div>
     <div class="tag-toggle-row" id="tag-toggle-row" hidden>
-      <button class="btn sm" id="tag-toggle" aria-expanded="false" aria-controls="tagbar"># Hashtag 篩選 ▾</button>
-      <span id="tag-active"></span>
+      <button class="btn sm" id="tag-toggle" aria-expanded="false" aria-controls="tag-panel"># Hashtag 篩選 ▾</button>
+      <span class="tags" id="tag-active"></span>
     </div>
-    <div class="tagbar" id="tagbar" hidden></div>
+    <!-- Hashtag 篩選面板：可多選；管理者可以統一改名 -->
+    <div class="tag-panel" id="tag-panel" hidden>
+      <div class="tag-tools">
+        <span class="small muted">可多選，顯示</span>
+        <div class="seg" role="group" aria-label="篩選方式">
+          <button type="button" data-mode="all" title="影片要同時有所有選取的標籤">符合全部</button>
+          <button type="button" data-mode="any" title="影片有其中一個選取的標籤即可">符合任一</button>
+        </div>
+        <span class="small muted">的影片</span>
+        <button type="button" class="linkbtn" id="tag-clear">清除選擇</button>
+        <button type="button" class="btn sm" id="tag-manage-btn" hidden>✎ 管理 Hashtag</button>
+      </div>
+      <div class="tagbar" id="tagbar"></div>
+      <div class="tag-manage" id="tag-manage" hidden></div>
+    </div>
     <div class="grid" id="lib-grid"></div>
   </section>
 
